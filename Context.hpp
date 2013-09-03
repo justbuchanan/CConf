@@ -18,6 +18,14 @@ namespace CConf {
 		KeyPathObserver(Context &ctxt, KeyPath &keyPath) : _context(ctxt), _keyPath(keyPath);
 		~KeyPathObserver();
 
+		KeyPath& keyPath() {
+			return _keyPath;
+		}
+
+		Context& context() {
+			return _context;
+		}
+
 
 	protected:
 		//	the context calls this method when the value the observer is observing has changed
@@ -42,8 +50,6 @@ namespace CConf {
 		Context(std::string &filePath) {
 			_loadManifest(filePath);
 		}
-
-
 
 		Context() {}
 
@@ -82,14 +88,12 @@ namespace CConf {
 			//	FIXME: trigger
 		}
 
-
 		void save() {
 			for ( auto itr = _configTrees.begin(); itr != _configTrees.end(); itr++ ) {
 				boost::shared_ptr<Tree> tree = *itr;
 				tree->write();
 			}
 		}
-
 
 		Tree &derivedTree() {
 			return _derivedTree;
@@ -99,8 +103,41 @@ namespace CConf {
 	protected:
 		friend class KeyPathObserver;
 
-		void registerObserver(KeyPathObserver *observer) {
+		/**
+		<Searches through the Context and sets the @tree and @node of the record
+		based on which Tree in the Context has highest precedence for the given key path>
 
+		@return true if the record needed updating
+		*/
+		bool _updateRecord(_ObservationRecord &record) {
+
+		}
+
+		bool _hasObserversForKeyPath(KeyPath &keyPath) {
+			return _observationRecords.find(keyPath) != _observationRecords.end();
+		}
+
+		void registerObserver(KeyPathObserver *observer) {
+			KeyPath keyPath = observer->keyPath();
+
+			//	create the record if necessary
+			if ( !_hasObserversForKeyPath(keyPath) ) {
+				_observationRecords[keyPath] = _ObservationRecord();
+				_observationRecords[keyPath].keyPath = keyPath;
+				_updateRecord(_observationRecords[keyPath]);
+			}
+
+			_ObservationRecord &record = _observationRecords[keyPath];
+
+
+			//	assert on double-registration attempts
+			assert(record.observers.find(observer) == record.observers.end());
+
+			record.observers.push_back(observer);
+
+			//	FIXME: notify?
+
+			//	FIXME:
 		}
 
 		void unregisterObserver(KeyPathObserver *observer) {
@@ -111,7 +148,8 @@ namespace CConf {
 	protected:
 		//	triggers change notifications on all of the observers for the given keyPath
 		void _keyPathChanged(KeyPath &keyPath) {
-
+			_ObservationRecord &record = _observationRecords[keyPath];
+			record.observers
 		}
 
 		void _loadManifest(std::string &filePath) {
@@ -135,9 +173,12 @@ namespace CConf {
 
 	private:
 		class _ObservationRecord {
-			KeyPath _keyPath;
-			KeyPath _tree;	//	the tree that the value cascades from	//	FIXME: what if it's an array?
-			std::set< KeyPathObserver* > _observers;	//	observers of this key path
+			KeyPath keyPath;
+
+			Tree tree;	//	the tree that the value cascades from	//	FIXME: what if it's an array?
+			Value &node;
+
+			std::set< KeyPathObserver* > observers;	//	observers of this key path
 		};
 
 		std::map< KeyPath, _ObservationRecord > _observationRecords;	//	observation records

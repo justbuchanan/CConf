@@ -18,9 +18,10 @@ int main(int argc, char **argv) {
 	CConf::KeyPath kp("setting_a");
 	cout << "Key Path: " << kp.description() << endl;
 
-	CConf::Item(ctxt, kp);
 
-
+	CConf::ItemImpl item<int>(ctxt, kp, 0);
+	int val = *item;
+	cout << "value: " << val << endl;
 
 
 	ctxt.save();
