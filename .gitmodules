@@ -1,0 +1,3 @@
+[submodule "json-spirit"]
+	path = json-spirit
+	url = git://gitorious.org/json-spirit/json-spirit.git
