@@ -15,6 +15,10 @@ bool CConf::KeyPath::operator==(KeyPath &other) {
 	return _components == other._components;
 }
 
+int CConf::KeyPath::length() {
+	return _components.length();
+}
+
 std::string CConf::KeyPath::description() {
 	std::stringstream ss;
 	ss << "<";
@@ -39,9 +43,3 @@ void CConf::KeyPath::_loadFromString(std::string &str) {
 		_components.push_back(t);
 	}
 }
-
-CConf::KeyPath::
-
-
-
-

@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 	cout << "Key Path: " << kp.description() << endl;
 
 
-	CConf::ItemImpl item<int>(ctxt, kp, 0);
+	CConf::ItemImpl<int> item(ctxt, kp, 0);
 	int val = *item;
 	cout << "value: " << val << endl;
 

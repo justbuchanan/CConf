@@ -11,35 +11,6 @@
 
 
 namespace CConf {
-	class Context;
-
-	class KeyPathObserver {
-	public:
-		KeyPathObserver(Context &ctxt, KeyPath &keyPath) : _context(ctxt), _keyPath(keyPath);
-		~KeyPathObserver();
-
-		KeyPath& keyPath() {
-			return _keyPath;
-		}
-
-		Context& context() {
-			return _context;
-		}
-
-
-	protected:
-		//	the context calls this method when the value the observer is observing has changed
-		virtual void notify() {}
-
-	private:
-		Context &_context;
-		KeyPath _keyPath;
-	};
-
-
-	//================================================================================
-
-
 	class Context {
 	public:
 		Context(const char *filePath) {
@@ -59,7 +30,9 @@ namespace CConf {
 			return this->load(fp);
 		}
 
-		//	loads a ConfigTree form the given @filePath and inserts it at index 0 (giving it the highest priority)
+		/**
+		loads a ConfigTree form the given @filePath and inserts it at index 0 (giving it the highest priority)
+		*/
 		boost::shared_ptr<Tree> load(std::string filePath) {
 			boost::shared_ptr<Tree> tree(new Tree(filePath));
 			this->insertTree(tree);
@@ -99,7 +72,6 @@ namespace CConf {
 			return _derivedTree;
 		}
 
-
 	protected:
 		friend class KeyPathObserver;
 
@@ -133,9 +105,10 @@ namespace CConf {
 			//	assert on double-registration attempts
 			assert(record.observers.find(observer) == record.observers.end());
 
-			record.observers.push_back(observer);
+			record.observers.insert(observer);
 
 			//	FIXME: notify?
+			observer->notify();
 
 			//	FIXME:
 		}
@@ -144,12 +117,12 @@ namespace CConf {
 
 		}
 
-
 	protected:
 		//	triggers change notifications on all of the observers for the given keyPath
 		void _keyPathChanged(KeyPath &keyPath) {
 			_ObservationRecord &record = _observationRecords[keyPath];
-			record.observers
+			// record.observers
+			//	FIXME: ????????
 		}
 
 		void _loadManifest(std::string &filePath) {
@@ -170,6 +143,16 @@ namespace CConf {
 	 		//	FIXME: what if manifest isn't an array?
 		}
 
+		static Value *lookup(Context &ctxt, KeyPath &kp, Tree **treeOut = NULL) {
+			for ( auto itr = ctxt._configTrees.begin(); itr != ctxt._configTrees.end(); itr++ ) {
+				json_spirit::Value *val = Tree::lookup(*itr, kp);
+				if ( treeOut ) *treeOut = itr->get();
+			}
+
+			//	the keyPath can't be found anywhere in the context
+			if ( treeOut ) *treeOut = NULL;
+			return NULL;
+		}
 
 	private:
 		class _ObservationRecord {

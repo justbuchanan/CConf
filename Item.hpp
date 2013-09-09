@@ -4,6 +4,7 @@
 #include <string>
 #include "KeyPath.hpp"
 #include "Context.hpp"
+#include "KeyPathObserver.hpp"
 
 
 namespace CConf {
@@ -12,9 +13,28 @@ namespace CConf {
 		Item(Context &ctxt, KeyPath &keyPath) : KeyPathObserver(ctxt, keyPath) {}
 		Item(Context &ctxt, std::string &keyPathStr) : KeyPathObserver(ctxt, keyPathStr) {}
 
-		json_spirit::Value &treeNode() {
-			//	FIXME: lookup
+		json_spirit::Value *treeNode() {
+			lookupIfNeeded();
+			return _value;
 		}
+
+	protected:
+		void setNeedsLookup() {
+			_needsLookup = true;
+		}
+
+		void lookupIfNeeded() {
+			if ( _needsLookup ) lookup();
+		}
+
+		void lookup() {
+			_value = Context::lookup(context(), keyPath(), &_tree);
+			_needsLookup = false;
+		}
+
+	private:
+		bool _needsLookup;
+		json_spirit::Value *_value;
 	};
 
 
@@ -25,7 +45,7 @@ namespace CConf {
 	class ItemImpl : public Item {
 	public:
 		ItemImpl(Context &ctxt, KeyPath &keyPath, T &defaultValue = 0) : Item(ctxt, keyPath) {}
-		ItemImpl(Context &ctxt, std::string &keyPathStr, T &defaultValue = 0) : Item(ctxt, keyPathStr) {}
+		ItemImpl(Context &ctxt, std::string &keyPathStr, T &defaultValue = 0) : Item(ctxt, KeyPath(keyPathStr)) {}
 
 		T &value() {
 			//	FIXME: look it up in the context
@@ -39,6 +59,8 @@ namespace CConf {
 		}
 
 	private:
-		T _defaultValue;
+		T _defaultPrimitiveValue;
+
+		json_spirit::Value *_value;
 	};
 }
