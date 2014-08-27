@@ -1,6 +1,6 @@
 
 all: CMakeLists.txt
-	mkdir build
+	mkdir -p build
 	cd build; cmake ..; make
 
 run: all
