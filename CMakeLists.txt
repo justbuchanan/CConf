@@ -15,7 +15,7 @@ include_directories(src)
 
 # TODO: include a FindQt5.cmake instead of hard-coding this
 if(APPLE)
-    set (CMAKE_PREFIX_PATH "/usr/local/Cellar/qt5/5.2.1/lib/cmake/Qt5Widgets")
+    set (CMAKE_PREFIX_PATH "/usr/local/Cellar/qt5/5.3.2/lib/cmake/Qt5Widgets")
 endif()
 
 # Qt5
@@ -24,9 +24,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 find_package(Qt5Widgets REQUIRED)
 
 
-ExternalProject_Add(VarTypes
-    GIT_REPOSITORY git://github.com/RoboJackets/vartypes
+ExternalProject_Add(jsoncpp
+    GIT_REPOSITORY git://github.com/open-source-parsers/jsoncpp
     GIT_TAG master
+    # BUILD_COMMAND cmake .. && make
     INSTALL_COMMAND "" # prevent global install
 )
 
@@ -36,13 +37,4 @@ file(GLOB cconf_SRC
     "src/*.cpp"
 )
 add_executable("cconf-test" ${cconf_SRC})
-
 qt5_use_modules("cconf-test" Widgets)
-
-include_directories(${CMAKE_BINARY_DIR}/VarTypes-prefix/src/VarTypes/vartypes)
-include_directories(${CMAKE_BINARY_DIR}/VarTypes-prefix/src/VarTypes/vartypes/primitives)
-include_directories(${CMAKE_BINARY_DIR}/VarTypes-prefix/src/VarTypes/vartypes/xml)
-include_directories(${CMAKE_BINARY_DIR}/VarTypes-prefix/src/VarTypes/vartypes/gui)
-add_dependencies("cconf-test" VarTypes)
-link_directories({CMAKE_BINARY_DIR}/lib/VarTypes-prefix/src/VarTypes-build)
-target_link_libraries("cconf-test" vartypes)
