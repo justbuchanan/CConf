@@ -24,12 +24,12 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 find_package(Qt5Widgets REQUIRED)
 
 
-ExternalProject_Add(jsoncpp
+ExternalProject_Add(jsoncpp-proj
     GIT_REPOSITORY git://github.com/open-source-parsers/jsoncpp
     GIT_TAG master
-    # BUILD_COMMAND cmake .. && make
     INSTALL_COMMAND "" # prevent global install
 )
+link_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj-build/lib)
 
 
 # the main executable
@@ -37,4 +37,6 @@ file(GLOB cconf_SRC
     "src/*.cpp"
 )
 add_executable("cconf-test" ${cconf_SRC})
+add_dependencies(cconf-test jsoncpp-proj)
+target_link_libraries(cconf-test "jsoncpp")
 qt5_use_modules("cconf-test" Widgets)
