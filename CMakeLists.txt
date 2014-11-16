@@ -30,6 +30,7 @@ ExternalProject_Add(jsoncpp-proj
     INSTALL_COMMAND "" # prevent global install
 )
 link_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj-build/lib)
+include_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj/include)
 
 
 # the main executable

@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
 
 
 
-    bool success = reader.parse(doc, root, false);
+    bool success = reader.parse(doc, root);
     if (!success) {
         cerr << "Error parsing json: " << reader.getFormattedErrorMessages();
         return EXIT_FAILURE;
