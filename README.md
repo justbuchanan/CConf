@@ -12,3 +12,8 @@ This library aims to make these types of situations as easy as possible.
 
 *Note: This is currently under development and not ready for use -
 this notice will be removed once the basic functionality is implemented and tested*
+
+
+## Precedence
+
+Specificity takes precedence over file order.
