@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     app.setApplicationDisplayName(name);
 
 
-    ConfigContext *ctxt = new ConfigContext();
+    CConf::Context *ctxt = new CConf::Context();
     ctxt->addFile("example.json");
     ctxt->addFile("example2.json");
 

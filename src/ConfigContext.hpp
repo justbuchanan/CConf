@@ -14,6 +14,7 @@
 using namespace std;
 
 
+namespace CConf {
 
 class TreePath {
 public:
@@ -39,19 +40,174 @@ public:
 };
 
 
+class Node {
+public:
+    Node(Node *parent = nullptr) {
+        _parent = parent;
+    }
 
-class ConfigContext : public QAbstractItemModel {
+    ~Node() {
+        if (_parent) delete _parent;
+    }
+
+    bool isMapNode() const {
+        return _mappedSubnodes.size() > 0;
+    }
+
+    bool isArrayNode() const {
+        return _indexedSubnodes.size() > 0;
+    }
+
+    bool isLeafNode() const {
+        return _valuesByScope.size() > 0;
+    }
+
+    Node *&operator[](int idx) {
+        if (isArrayNode()) {
+            return _indexedSubnodes[idx];
+        } else {
+            throw invalid_argument("Attempt to index into non-array Node");
+        }
+    }
+
+    Node *&operator[](string key) {
+        if (isMapNode()) {
+            return _mappedSubnodes[key];
+        } else {
+            throw invalid_argument("Attempt to subscript into non-map Node");
+        }
+    }
+
+
+    //  Methods for QAbstractItemModel
+    ////////////////////////////////////////////////////////////////////////////////////
+
+    QVariant data(int column) const {
+        //  FIXME: implement
+        return "Data";
+    }
+
+    int columnCount() const {
+        return 1;   //  FIXME
+    }
+
+    int childCount() const {
+        return max(_mappedSubnodes.size(), _indexedSubnodes.size());
+    }
+
+    Node *_childAtIndex(int index) {
+        if (isMapNode()) {
+            throw invalid_argument("Justin has yet to implement this");
+            auto itr = _mappedSubnodes.begin();
+            return itr->second;
+        } else if (isArrayNode()) {
+            return (*this)[index];
+        } else {
+            throw invalid_argument("Attempt to get child of leaf Node");
+            return nullptr;
+        }
+    }
+
+    int row() {
+        if (_parent) {
+            return _parent->indexOfSubnode(this);
+        } else {
+            return 0;
+        }
+    }
+
+    int indexOfSubnode(const Node *child) const {
+        if (isArrayNode()) {
+            auto itr = std::find(_indexedSubnodes.begin(), _indexedSubnodes.end(), child);
+            if (itr == _indexedSubnodes.end()) return -1;
+
+            return itr - _indexedSubnodes.begin();
+        } else if (isMapNode()) {
+            throw invalid_argument("Justin needs to implement this too");
+        } else {
+            throw invalid_argument("Attempt to get ask leaf node about its subnodes");
+        }
+    }
+
+    Node *parent() {
+        return _parent;
+    }
+
+
+protected:
+    friend class Context;
+
+    map<string, Node*> mappedSubnodes() { return _mappedSubnodes; }
+    const map<string, Node*> mappedSubnodes() const { return _mappedSubnodes; }
+
+    vector<Node*> indexedSubnodes() { return _indexedSubnodes; }
+    const vector<Node*> indexedSubnodes() const { return _indexedSubnodes; }
+
+private:
+    map< vector<string>, Json::Value > _valuesByScope;
+
+    //  if this is a parent node
+    map<string, Node*> _mappedSubnodes;
+    vector<Node*> _indexedSubnodes;
+    Node *_parent;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+
+class BranchNode : public Node {
+public:
+    BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
+};
+
+
+class LeafNode : public Node {
+public:
+    LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
+
+
+private:
+    /// values by file path
+    map<string, QVariant> _valuesByFile;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+
+class ScopedValueNode : public Node {
+public:
+    ScopedValueNode(BranchNode *parent) : Node(parent) {}
+
+    const bool isDefaultScope() const {
+        return _scope.size() == 0;
+    }
+
+    const vector<string> &scope() const {
+        return _scope;
+    }
+
+private:
+    vector<string> _scope;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+
+class Context : public QAbstractItemModel {
     Q_OBJECT
 
 public:
-    ConfigContext() {
-        QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &ConfigContext::fileChanged);
+    Context() {
+        QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &Context::fileChanged);
 
         _rootNode = new BranchNode();
     }
 
     void fileChanged(const QString &filePath) {
-        cout << "ConfigContext file changed: " << filePath.toStdString() << endl;
+        cout << "Context file changed: " << filePath.toStdString() << endl;
     }
 
     void addFile(const string &path) {
@@ -59,18 +215,18 @@ public:
             throw "this config file is already loaded";
         }
 
-        Json::value tree;
+        Json::Value tree;
         readFile(path, tree);   //  note: throws an exception on failure
 
         try {
-            merge(*tree, path);
-        catch (TypeMismatchError e) {
+            merge(_rootNode, tree, path);
+        } catch (TypeMismatchError e) {
             cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
             cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
             throw e;
         }
 
-        _configTrees.push_back(path);
+        _configFiles.push_back(path);
         _fsWatcher.addPath(QString::fromStdString(path));
     }
 
@@ -82,24 +238,18 @@ public:
         }
     }
 
+
     bool containsFile(const string &path) {
         return indexOfFile(path) != -1;
     }
 
-    void readFile(const string &filePath, Json::Value jsonOut) {
-        ifstream doc(filePath);
-        Json::Reader reader;
-        if (!reader.parse(doc, jsonOut)) {
-            throw runtime_error("failed to parse json: " + reader.getFormattedErrorMessages());
-        }
-    }
 
     void removeFile(const string &filePath) {
         int idx = indexOfFile(filePath);
         if (idx == -1) {
-            cerr << "Warning: Attempt to remove file from ConfigContext that's not in the context: " << filePath;
+            cerr << "Warning: Attempt to remove file from Context that's not in the context: " << filePath;
         } else {
-            _configTrees.erase(_configTrees.begin() + idx);
+            _configFiles.erase(_configFiles.begin() + idx);
             _fsWatcher.removePath(QString::fromStdString(filePath));
         }
     }
@@ -107,11 +257,8 @@ public:
 
     /// returns -1 if the file isn't a part of this context
     int indexOfFile(const string &path) {
-        for (int i = 0; i < _configTrees.size(); i++) {
-            if (_configTrees[i].first == path) return i;
-        }
-
-        return -1;
+        auto itr = std::find(_configFiles.begin(), _configFiles.end(), path);
+        return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
     }
 
 
@@ -221,26 +368,20 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void merge(const Json::Value &json, const string &filePath) {
-        _merge(_rootNode, json, filePath);
+    void merge(Node *node, const Json::Value &json, const string &filePath) {
+        throw invalid_argument("TODO");
     }
 
-    void _merge(Node *node, const Json::Value &json, const string &filePath) {
-
-    }
 
     /**
      * @brief When we remove a file from the context, we need to remove the values from the tree
      * 
      * @param filePath the path of the file we're removing
      */
-    void removeValuesFromFile(const string &filePath) {
-        _removeValuesFromFile(_rootNode, filePath);
-    }
-
-    void _removeValuesFromFile(Node *node, filePath) {
+    void removeValuesFromFile(Node *node, const string &filePath) {
         throw invalid_argument("TODO");
     }
+
 
     /**
      * Find the relative priority of a file.  Used when merging to determine whether or not to overwrite a value.
@@ -248,8 +389,7 @@ protected:
      * @return the relative priority of the file.  Higher values indicate greater importance/priority
      */
     int priorityOfFile(const string &filePath) {
-        auto itr = std::find(_configFiles.begin(), _configFiles.end(), filePath);
-        return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
+        return indexOfFile(filePath);
     }
 
 
@@ -271,157 +411,6 @@ protected:
 
 protected:
 
-    class Node {
-    public:
-        Node(Node *parent = nullptr) {
-            _parent = parent;
-        }
-
-        ~Node() {
-            if (_parent) delete _parent;
-        }
-
-        bool isMapNode() const {
-            return _mappedSubnodes.size() > 0;
-        }
-
-        bool isArrayNode() const {
-            return _indexedSubnodes.size() > 0;
-        }
-
-        bool isLeafNode() const {
-            return _valuesByScope.size() > 0;
-        }
-
-        Node *&operator[](int idx) {
-            if (isArrayNode()) {
-                return _indexedSubnodes[idx];
-            } else {
-                throw invalid_argument("Attempt to index into non-array Node");
-            }
-        }
-
-        Node *&operator[](string key) {
-            if (isMapNode()) {
-                return _mappedSubnodes[key];
-            } else {
-                throw invalid_argument("Attempt to subscript into non-map Node");
-            }
-        }
-
-
-        //  Methods for QAbstractItemModel
-        ////////////////////////////////////////////////////////////////////////////////////
-
-        QVariant data(int column) const {
-            //  FIXME: implement
-            return "Data";
-        }
-
-        int columnCount() const {
-            return 1;   //  FIXME
-        }
-
-        int childCount() const {
-            return max(_mappedSubnodes.size(), _indexedSubnodes.size());
-        }
-
-        Node *_childAtIndex(int index) {
-            if (isMapNode()) {
-                throw invalid_argument("Justin has yet to implement this");
-                auto itr = _mappedSubnodes.begin();
-                return itr->second;
-            } else if (isArrayNode()) {
-                return (*this)[index];
-            } else {
-                throw invalid_argument("Attempt to get child of leaf Node");
-                return nullptr;
-            }
-        }
-
-        int row() {
-            if (_parent) {
-                return _parent->indexOfSubnode(this);
-            } else {
-                return 0;
-            }
-        }
-
-        int indexOfSubnode(const Node *child) const {
-            if (isArrayNode()) {
-                auto itr = std::find(_indexedSubnodes.begin(), _indexedSubnodes.end(), child);
-                if (itr == _indexedSubnodes.end()) return -1;
-
-                return itr - _indexedSubnodes.begin();
-            } else if (isMapNode()) {
-                throw invalid_argument("Justin needs to implement this too");
-            } else {
-                throw invalid_argument("Attempt to get ask leaf node about its subnodes");
-            }
-        }
-
-        Node *parent() {
-            return _parent;
-        }
-
-
-    protected:
-        friend class ConfigContext;
-
-        map<string, Node*> mappedSubnodes() { return _mappedSubnodes; }
-        const map<string, Node*> mappedSubnodes() const { return _mappedSubnodes; }
-
-        vector<Node*> indexedSubnodes() { return _indexedSubnodes; }
-        const vector<Node*> indexedSubnodes() const { return _indexedSubnodes; }
-
-    private:
-        map< vector<string>, Json::Value > _valuesByScope;
-
-        //  if this is a parent node
-        map<string, Node*> _mappedSubnodes;
-        vector<Node*> _indexedSubnodes;
-        Node *_parent;
-    };
-
-
-    ////////////////////////////////////////////////////////////////////////////////
-
-
-    class BranchNode : public Node {
-    public:
-        BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
-    };
-
-
-    class LeafNode : public Node {
-    public:
-        LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
-
-
-    private:
-        /// values by file path
-        map<string, QVariant> _valuesByFile;
-    };
-
-
-    ////////////////////////////////////////////////////////////////////////////////
-
-
-    class ScopedValueNode : public Node {
-    public:
-        ScopedValueNode(BranchNode *parent) : Node(parent) {}
-
-        const bool isDefaultScope() const {
-            return _scope.size() == 0;
-        }
-
-        const vector<string> &scope() const {
-            return _scope;
-        }
-
-    private:
-        vector<string> _scope;
-    };
 
 
 
@@ -440,13 +429,13 @@ template<typename T>
 class ConfigValue {
 public:
     ConfigValue(string keyPath, T defaultValue, string comment = "");
-    ConfigValue(shared_ptr<ConfigContext> ctxt, string keyPath, T defaultValue, string comment = "");
+    ConfigValue(shared_ptr<Context> ctxt, string keyPath, T defaultValue, string comment = "");
 
-    void setContext(ConfigContext *ctxt) {
+    void setContext(Context *ctxt) {
         _context = ctxt;
     }
 
-    ConfigContext context() {
+    Context context() {
         return _context;
     }
 
@@ -471,7 +460,7 @@ private:
     T _value;
     vector<string> _scope;
     string _comment;
-    shared_ptr<ConfigContext> _context;
+    shared_ptr<Context> _context;
 };
 
 
@@ -483,3 +472,6 @@ public:
     ConfigDouble(string keyPath, double defaultValue = 0, string comment = "");
     operator double();
 };
+
+
+};  //  end namespace CConf
