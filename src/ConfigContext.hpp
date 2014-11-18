@@ -33,6 +33,8 @@ class ConfigContext : public QAbstractItemModel {
 public:
     ConfigContext() {
         QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &ConfigContext::fileChanged);
+
+        _rootNode = new PathNode();
     }
 
     void fileChanged(const QString &filePath) {
@@ -117,16 +119,53 @@ public:
         return createIndex(parentNode->row(), 0, parentNode);
     }
 
+
     int rowCount(const QModelIndex &parent = QModelIndex()) const {
-        return 0;   //  FIXME:
+        const Node *parentNode;
+        if (parent.column() > 0) return 0;
+
+        if (!parent.isValid()) {
+            parentNode = _rootNode;
+        } else {
+            parentNode = static_cast<const Node*>(parent.internalPointer());
+        }
+
+        return parentNode->childCount();
     }
+
 
     int columnCount(const QModelIndex &parent = QModelIndex()) const {
-        return 0;   //  FIXME: 
+        if (parent.isValid()) {
+            return static_cast<const Node*>(parent.internalPointer())->columnCount();
+        } else {
+            return _rootNode->columnCount();
+        }
     }
 
+
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const {
-        return QVariant();  //  FIXME
+        if (!index.isValid()) return QVariant();
+
+        if (role != Qt::DisplayRole) return QVariant();
+
+        const Node *node = static_cast<const Node*>(index.internalPointer());
+        return node->data(index.column());
+    }
+
+
+    Qt::ItemFlags flags(const QModelIndex &index) const {
+        if (!index.isValid()) return 0;
+
+        return Qt::ItemIsEnabled | Qt::ItemIsSelectable;    //  FIXME: this is readonly - eventually we'll make it readwrite
+    }
+
+
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const {
+        if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
+            return "CConf";
+        }
+
+        return QVariant();
     }
 
 
@@ -174,6 +213,19 @@ protected:
 
         //  Methods for QAbstractItemModel
         ////////////////////////////////////////////////////////////////////////////////////
+
+        QVariant data(int column) const {
+            //  FIXME: implement
+            return "Data";
+        }
+
+        int columnCount() const {
+            return 1;   //  FIXME
+        }
+
+        int childCount() const {
+            return max(_mappedSubnodes.size(), _indexedSubnodes.size());
+        }
 
         Node *_childAtIndex(int index) {
             if (isMapNode()) {

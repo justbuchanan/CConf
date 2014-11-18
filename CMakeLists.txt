@@ -10,6 +10,10 @@ include(ExternalProject)
 #       it complains about position-independent code otherwise
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC")
 
+
+# DEBUG
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+
 # includes
 include_directories(src)
 
