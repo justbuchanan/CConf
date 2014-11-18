@@ -399,19 +399,19 @@ protected:
             case Json::intValue: return QVariant(json.asInt());
             case Json::uintValue: return QVariant(json.asUInt());
             case Json::realValue: return QVariant(json.asDouble());
-            case Json::stringValue: return QVariant(json.asString());
+            case Json::stringValue: return QVariant(QString::fromStdString(json.asString()));
             case Json::booleanValue: return QVariant(json.asBool());
-            case Json::arrayValue: {
+            case Json::arrayValue:
+            {
                 QList<QVariant> lst;
                 for (auto itr : json) {
-                    lst.append(variantValueFromJson(*itr));
+                    lst.append(variantValueFromJson(itr));
                 }
-                return QVariant(list)
+                return QVariant(lst);
             }
-            default: {
+            default:
                 throw invalid_argument("Invalid json value passed to variantValueFromJson()");  //  TODO: more info
                 return QVariant();
-            }
         }
     }
 
