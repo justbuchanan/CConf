@@ -27,6 +27,7 @@ private:
 
 
 
+
 class ConfigContext : public QAbstractItemModel {
     Q_OBJECT
 
@@ -34,7 +35,7 @@ public:
     ConfigContext() {
         QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &ConfigContext::fileChanged);
 
-        _rootNode = new PathNode();
+        _rootNode = new BranchNode();
     }
 
     void fileChanged(const QString &filePath) {
@@ -170,6 +171,58 @@ public:
 
 
 
+
+    //  Deep shit
+    //////////////////////////////////////////////////////////////////////////////////////
+protected:
+
+    void _didInsert(const QModelIndex &index) {
+        //  FIXME: emit, notify
+    }
+
+    void _didDelete(const QModelIndex &index) {
+        //  FIXME: emit, notify
+    }
+
+    void _didChange(const QModelIndex &index) {
+        //  FIXME: emit, notify
+    }
+
+
+    /**
+     * recursive method to apply the new json value on top of the config (sub)tree
+     * calls _didInsert, _didDelete, _didChange as it goes
+     * respects the priorities already present and only replaces if the given json has higher prioity
+     * then another leaf node with the same key path
+     * 
+     * @param node the root of the (sub)tree to merge the new values onto
+     * @param json the json to merge onto the given tree
+     * @param filePath the file path of the json - used to lookup the priority of @json as necessary
+     */
+    void merge(Node *node, Json::Value json, const string &filePath) {
+
+    }
+
+
+    /**
+     * Find the relative priority of a file.  Used when merging to determine whether or not to overwrite a value.
+     * @param filePath Where the file lives
+     * @return the relative priority of the file.  Higher values indicate greater importance/priority
+     */
+    int priorityOfFile(const string &filePath) {
+        int i = 0;
+        for (auto p : _configTrees) {
+            if (p.first == filePath) {
+                return i;
+            }
+            i++;
+        }
+
+        return -1;
+    }
+
+
+
 protected:
 
     class Node {
@@ -288,9 +341,19 @@ protected:
     ////////////////////////////////////////////////////////////////////////////////
 
 
-    class PathNode : public Node {
+    class BranchNode : public Node {
     public:
-        PathNode(PathNode *parent = nullptr) : Node(parent) {}
+        BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
+    };
+
+
+    class LeafNode : public Node {
+    public:
+
+
+    private:
+        /// values by file path
+        map<string, QVariant> _valuesByFile;
     };
 
 
@@ -299,7 +362,7 @@ protected:
 
     class ScopedValueNode : public Node {
     public:
-        ScopedValueNode(PathNode *parent) : Node(parent) {}
+        ScopedValueNode(BranchNode *parent) : Node(parent) {}
 
         const bool isDefaultScope() const {
             return _scope.size() == 0;
@@ -314,16 +377,11 @@ protected:
     };
 
 
-    void insertTree(const Json::Value &tree) {
-        //  TODO: do it
-    }
-
-
 
 private:
-    //  higher index = higher precedence when cascading values
-    vector<pair<string, shared_ptr<Json::Value>>> _configTrees;
-    PathNode *_rootNode;
+    //  higher index = higher precedence when cascading values. FIXME: is this true?
+    vector<pair<string> _configFiles;
+    BranchNode *_rootNode;
     QFileSystemWatcher _fsWatcher;
 };
 
