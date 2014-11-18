@@ -2,6 +2,8 @@
 
 #include <json/json.h>
 #include <vector>
+#include <set>
+#include <map>
 #include <memory>
 #include <string>
 #include <fstream>
@@ -42,6 +44,10 @@ public:
 };
 
 
+
+class Context;
+
+
 class Node {
 public:
     Node(Node *parent = nullptr) {
@@ -65,9 +71,6 @@ public:
     //         throw invalid_argument("Attempt to index into non-array Node");
     //     }
     // }
-
-    //  FIXME: only include in BranchNode?
-    virtual Node *&operator[](const string &key) = 0;
 
 
     //  Methods for QAbstractItemModel
@@ -152,7 +155,9 @@ public:
         _subnodes[key];
     }
 
-private:
+protected:
+    friend class Context;
+
     map<string, Node*> _subnodes;
 };
 
@@ -224,7 +229,8 @@ public:
         readFile(path, tree);   //  note: throws an exception on failure
 
         try {
-            mergeJson(_rootNode, tree, path);
+            vector<string>scope;
+            mergeJson(_rootNode, tree, scope, path);
         } catch (TypeMismatchError e) {
             cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
             cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
@@ -379,9 +385,9 @@ protected:
      * Extracts all of the keys from the given map and puts them in the @keysOut set
      */
     template<typename KeyType, typename ValueType>
-    void getMapKeys(const map<KeyType, ValueType> *theMap, set<KeyType> &keysOut) {
+    void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> &keysOut) {
         for (auto itr : theMap) {
-            keysOut.insert(itr->first);
+            keysOut.insert(itr.first);
         }
     }
 
@@ -432,8 +438,8 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope;, const string &filePath) {
-        if (node->isLeafNode() == (json.type == Json::object)) {
+    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
+        if (node->isLeafNode() == (json.type() == Json::objectValue)) {
             throw TypeMismatchError("Attempt to merge a tree and a leaf");  //  TODO: give keypath info
         }
 
@@ -441,25 +447,34 @@ protected:
         if (node->isLeafNode()) {
             throw invalid_argument("TODO");
         } else {
+            BranchNode *parentNode = (BranchNode *)node;
+
             set<string> existingKeys;
-            getMapKeys(node->_subnodes, existingKeys);
+            getMapKeys<string, Node*>(parentNode->_subnodes, existingKeys);
 
-            for (Json::ValueIterator itr = json.begin(); itr != json.end()) {
-                if (existingKeys.find(itr.key()) != existingKeys.end()) {
-                    existingKeys.remove(itr.key());
+            for (Json::ValueIterator itr = json.begin(); itr != json.end(); itr++) {
+                string jsonKey = itr.key().asString();
+
+                if (existingKeys.find(jsonKey) != existingKeys.end()) {
+                    existingKeys.erase(jsonKey);
                 } else {
-                    Node *newChildNode = (itr->type() == Json::object) ? BranchNode(node) : LeafNode(node);
-                    node->subnodes[itr.key()] = newChildNode;
+                    Node *newChildNode;
+                    if (itr->type() == Json::objectValue) {
+                        newChildNode = new BranchNode(parentNode);
+                    } else {
+                        newChildNode = new LeafNode(parentNode);
+                    }
+                    parentNode->_subnodes[jsonKey] = newChildNode;
 
-                    cout << "Appended new node for key: " << itr.key() << endl;
+                    cout << "Appended new node for key: " << jsonKey << endl;
                 }
 
-                mergeJson(node->subnodes[itr.key()], *itr, scope, filePath);
+                mergeJson(parentNode->_subnodes[jsonKey], *itr, scope, filePath);
             }
 
             //  other keys under this branch that this json didn't have anything for
-            for (const string &key : existingKeys) {
-                removeValuesFromFile(node->_subnodes[key], filePath);
+            for (auto key : existingKeys) {
+                removeValuesFromFile(parentNode->_subnodes[key], filePath);
             }
         }
     }
