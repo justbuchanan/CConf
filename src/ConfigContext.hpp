@@ -26,6 +26,18 @@ private:
 
 
 
+/**
+ * @brief Error that occurs when loading a json file creates a type mismatch between nodes.
+
+ * @details If one json file has a leaf type for a given path and another has an object (map/dict)
+ * type, there is a type mismatch that can't be resolved.  Note that t's ok for leaves from different
+ * files to be different types.
+ */
+class TypeMismatchError : public runtime_error {
+public:
+    TypeMismatchError(const char *what) : runtime_error(what) {}
+};
+
 
 
 class ConfigContext : public QAbstractItemModel {
@@ -47,29 +59,39 @@ public:
             throw "this config file is already loaded";
         }
 
-        auto tree = readFile(path);
-        if (!tree) {
-            throw "Unable to load file";
+        Json::value tree;
+        readFile(path, tree);   //  note: throws an exception on failure
+
+        try {
+            merge(*tree, path);
+        catch (TypeMismatchError e) {
+            cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
+            cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
+            throw e;
         }
 
-        _configTrees.push_back(pair<string, shared_ptr<Json::Value>>(path, tree));
+        _configTrees.push_back(path);
         _fsWatcher.addPath(QString::fromStdString(path));
+    }
+
+    void readFile(const string &filePath, Json::Value jsonOut) {
+        ifstream doc(filePath);
+        Json::Reader reader;
+        if (!reader.parse(doc, jsonOut)) {
+            throw runtime_error("failed to parse json: " + reader.getFormattedErrorMessages());
+        }
     }
 
     bool containsFile(const string &path) {
         return indexOfFile(path) != -1;
     }
 
-    shared_ptr<Json::Value> readFile(string filePath) {
+    void readFile(const string &filePath, Json::Value jsonOut) {
         ifstream doc(filePath);
-        shared_ptr<Json::Value> root(new Json::Value());
         Json::Reader reader;
-        if (!reader.parse(doc, *root)) {
-            // throw std::exception("failed to parse json: " + reader.getFormattedErrorMessages());
-            return nullptr;
+        if (!reader.parse(doc, jsonOut)) {
+            throw runtime_error("failed to parse json: " + reader.getFormattedErrorMessages());
         }
-
-        return root;
     }
 
     void removeFile(const string &filePath) {
@@ -199,10 +221,26 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void merge(Node *node, Json::Value json, const string &filePath) {
+    void merge(const Json::Value &json, const string &filePath) {
+        _merge(_rootNode, json, filePath);
+    }
+
+    void _merge(Node *node, const Json::Value &json, const string &filePath) {
 
     }
 
+    /**
+     * @brief When we remove a file from the context, we need to remove the values from the tree
+     * 
+     * @param filePath the path of the file we're removing
+     */
+    void removeValuesFromFile(const string &filePath) {
+        _removeValuesFromFile(_rootNode, filePath);
+    }
+
+    void _removeValuesFromFile(Node *node, filePath) {
+        throw invalid_argument("TODO");
+    }
 
     /**
      * Find the relative priority of a file.  Used when merging to determine whether or not to overwrite a value.
@@ -210,15 +248,23 @@ protected:
      * @return the relative priority of the file.  Higher values indicate greater importance/priority
      */
     int priorityOfFile(const string &filePath) {
-        int i = 0;
-        for (auto p : _configTrees) {
-            if (p.first == filePath) {
-                return i;
-            }
-            i++;
-        }
+        auto itr = std::find(_configFiles.begin(), _configFiles.end(), filePath);
+        return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
+    }
 
-        return -1;
+
+    /**
+     * @brief Extract the json for the given file so it can be written to disk
+     * 
+     * @details We don't store a Json::Value for trees in the context.  We load it from a file,
+     * then store it in our custom tree structure.  To write it out to disk, we have have to
+     * convert it from our internal representation back to json.
+     * 
+     * @param filePath The path of the file we're extracting for.
+     * @return 
+     */
+    void extractJson(const string &filePath, Json::Value &json) {
+        throw invalid_argument("TODO");
     }
 
 
@@ -349,6 +395,7 @@ protected:
 
     class LeafNode : public Node {
     public:
+        LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
 
 
     private:
@@ -380,7 +427,7 @@ protected:
 
 private:
     //  higher index = higher precedence when cascading values. FIXME: is this true?
-    vector<pair<string> _configFiles;
+    vector<string> _configFiles;
     BranchNode *_rootNode;
     QFileSystemWatcher _fsWatcher;
 };
