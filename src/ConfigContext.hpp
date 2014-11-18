@@ -16,6 +16,7 @@ using namespace std;
 
 namespace CConf {
 
+/*
 class TreePath {
 public:
     /// @param path A dot-separated key path
@@ -24,6 +25,7 @@ public:
 private:
     vector<string> _components;
 };
+*/
 
 
 
@@ -54,29 +56,18 @@ public:
         return _mappedSubnodes.size() > 0;
     }
 
-    bool isArrayNode() const {
-        return _indexedSubnodes.size() > 0;
-    }
+    virtual bool isLeafNode() const = 0;
 
-    bool isLeafNode() const {
-        return _valuesByScope.size() > 0;
-    }
+    // Node *&operator[](int idx) {
+    //     if (isArrayNode()) {
+    //         return _indexedSubnodes[idx];
+    //     } else {
+    //         throw invalid_argument("Attempt to index into non-array Node");
+    //     }
+    // }
 
-    Node *&operator[](int idx) {
-        if (isArrayNode()) {
-            return _indexedSubnodes[idx];
-        } else {
-            throw invalid_argument("Attempt to index into non-array Node");
-        }
-    }
-
-    Node *&operator[](string key) {
-        if (isMapNode()) {
-            return _mappedSubnodes[key];
-        } else {
-            throw invalid_argument("Attempt to subscript into non-map Node");
-        }
-    }
+    //  FIXME: only include in BranchNode?
+    virtual Node *&operator[](const string &key) = 0;
 
 
     //  Methods for QAbstractItemModel
@@ -100,8 +91,6 @@ public:
             throw invalid_argument("Justin has yet to implement this");
             auto itr = _mappedSubnodes.begin();
             return itr->second;
-        } else if (isArrayNode()) {
-            return (*this)[index];
         } else {
             throw invalid_argument("Attempt to get child of leaf Node");
             return nullptr;
@@ -117,12 +106,7 @@ public:
     }
 
     int indexOfSubnode(const Node *child) const {
-        if (isArrayNode()) {
-            auto itr = std::find(_indexedSubnodes.begin(), _indexedSubnodes.end(), child);
-            if (itr == _indexedSubnodes.end()) return -1;
-
-            return itr - _indexedSubnodes.begin();
-        } else if (isMapNode()) {
+        if (isMapNode()) {
             throw invalid_argument("Justin needs to implement this too");
         } else {
             throw invalid_argument("Attempt to get ask leaf node about its subnodes");
@@ -159,26 +143,26 @@ private:
 class BranchNode : public Node {
 public:
     BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
-};
 
+    bool isLeafNode() const {
+        return false;
+    }
 
-class LeafNode : public Node {
-public:
-    LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
-
+    Node *&operator[](const string &key) {
+        _subnodes[key];
+    }
 
 private:
-    /// values by file path
-    map<string, QVariant> _valuesByFile;
+    map<string, Node*> _subnodes;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
 
-class ScopedValueNode : public Node {
+class ValueNode : public Node {
 public:
-    ScopedValueNode(BranchNode *parent) : Node(parent) {}
+    ValueNode(BranchNode *parent, const QVariant &value) : Node(parent) {}
 
     const bool isDefaultScope() const {
         return _scope.size() == 0;
@@ -188,9 +172,30 @@ public:
         return _scope;
     }
 
+    const QVariant &value() const { return _value; }
+    QVariant &value() { return _value; }
+
 private:
     vector<string> _scope;
+    string _filePath;
+    QVariant _value;
 };
+
+
+
+class LeafNode : public Node {
+public:
+    LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
+
+    bool isLeafNode() const {
+        return true;
+    }
+
+
+private:
+    vector<ValueNode> _valueNodes;
+};
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -362,13 +367,20 @@ protected:
      * recursive method to apply the new json value on top of the config (sub)tree
      * calls _didInsert, _didDelete, _didChange as it goes
      * respects the priorities already present and only replaces if the given json has higher prioity
-     * then another leaf node with the same key path
+     * then another leaf node with the same key path.
+     * 
+     * If a type mismatch is encountered, the TypeMismatchError is thrown, but the values are not
+     * removed from the tree - that's the job of the caller.
      * 
      * @param node the root of the (sub)tree to merge the new values onto
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
     void merge(Node *node, const Json::Value &json, const string &filePath) {
+
+
+
+
         throw invalid_argument("TODO");
     }
 
@@ -406,11 +418,6 @@ protected:
     void extractJson(const string &filePath, Json::Value &json) {
         throw invalid_argument("TODO");
     }
-
-
-
-protected:
-
 
 
 
