@@ -224,7 +224,7 @@ public:
         readFile(path, tree);   //  note: throws an exception on failure
 
         try {
-            merge(_rootNode, tree, path);
+            mergeJson(_rootNode, tree, path);
         } catch (TypeMismatchError e) {
             cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
             cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
@@ -364,6 +364,59 @@ protected:
 
 
     /**
+     * @brief Determine whether the key specifies a (sub)scope rather than a regular keypath
+     * @details Scopes paths are prefixed with '$$', so we check to see if @key has this prefix.
+     * 
+     * @param key the json key string
+     * @return whether or not it's a scope specifier
+     */
+    bool keyIsJsonScopeSpecifier(const string &key) {
+        return key.length() >= 3 && key[0] == '$' && key[1] == '$';
+    }
+
+
+    /**
+     * Extracts all of the keys from the given map and puts them in the @keysOut set
+     */
+    template<typename KeyType, typename ValueType>
+    void getMapKeys(const map<KeyType, ValueType> *theMap, set<KeyType> &keysOut) {
+        for (auto itr : theMap) {
+            keysOut.insert(itr->first);
+        }
+    }
+
+
+    //  TODO: replace std::find() calls with container.find()
+
+    /**
+     * Anything that isn't a json 'object' type is stored in the tree in a leaf node as a QVariant.
+     * This method creates the corresponding QVariant from a json value.
+     * See <json/value.h> for a list of available types
+     */
+    QVariant variantValueFromJson(const Json::Value &json) {
+        switch (json.type()) {
+            case Json::nullValue: return QVariant();
+            case Json::intValue: return QVariant(json.asInt());
+            case Json::uintValue: return QVariant(json.asUInt());
+            case Json::realValue: return QVariant(json.asDouble());
+            case Json::stringValue: return QVariant(json.asString());
+            case Json::booleanValue: return QVariant(json.asBool());
+            case Json::arrayValue: {
+                QList<QVariant> lst;
+                for (auto itr : json) {
+                    lst.append(variantValueFromJson(*itr));
+                }
+                return QVariant(list)
+            }
+            default: {
+                throw invalid_argument("Invalid json value passed to variantValueFromJson()");  //  TODO: more info
+                return QVariant();
+            }
+        }
+    }
+
+
+    /**
      * recursive method to apply the new json value on top of the config (sub)tree
      * calls _didInsert, _didDelete, _didChange as it goes
      * respects the priorities already present and only replaces if the given json has higher prioity
@@ -372,16 +425,43 @@ protected:
      * If a type mismatch is encountered, the TypeMismatchError is thrown, but the values are not
      * removed from the tree - that's the job of the caller.
      * 
+     * As it walks the tree, it removes any values from the @node and its subnodes that came from
+     * @filePath, but are not in @json.
+     * 
      * @param node the root of the (sub)tree to merge the new values onto
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void merge(Node *node, const Json::Value &json, const string &filePath) {
+    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope;, const string &filePath) {
+        if (node->isLeafNode() == (json.type == Json::object)) {
+            throw TypeMismatchError("Attempt to merge a tree and a leaf");  //  TODO: give keypath info
+        }
 
 
+        if (node->isLeafNode()) {
+            throw invalid_argument("TODO");
+        } else {
+            set<string> existingKeys;
+            getMapKeys(node->_subnodes, existingKeys);
 
+            for (Json::ValueIterator itr = json.begin(); itr != json.end()) {
+                if (existingKeys.find(itr.key()) != existingKeys.end()) {
+                    existingKeys.remove(itr.key());
+                } else {
+                    Node *newChildNode = (itr->type() == Json::object) ? BranchNode(node) : LeafNode(node);
+                    node->subnodes[itr.key()] = newChildNode;
 
-        throw invalid_argument("TODO");
+                    cout << "Appended new node for key: " << itr.key() << endl;
+                }
+
+                mergeJson(node->subnodes[itr.key()], *itr, scope, filePath);
+            }
+
+            //  other keys under this branch that this json didn't have anything for
+            for (const string &key : existingKeys) {
+                removeValuesFromFile(node->_subnodes[key], filePath);
+            }
+        }
     }
 
 
