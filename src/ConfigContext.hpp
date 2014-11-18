@@ -6,11 +6,11 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <QFileSystemWatcher>
 #include <QAbstractItemModel>
 
 using namespace std;
-
 
 
 
@@ -26,18 +26,12 @@ private:
 
 
 
-
-
 class ConfigContext : public QObject {
     Q_OBJECT
 
 public:
     ConfigContext() {
         QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &ConfigContext::fileChanged);
-    }
-
-    const Json::Value &jsonValue() {
-        return _combined;
     }
 
     void fileChanged(const QString &filePath) {
@@ -96,10 +90,68 @@ public:
     }
 
 
+//  ITEM MODEL STUFF
+
+
+
+protected:
+
+    class Node {
+    public:
+        Node() {
+
+        }
+
+        bool isMapNode() const {
+            return _mappedSubnodes.size() > 0;
+        }
+
+        bool isArrayNode() const {
+            return _indexedSubnodes.size() > 0;
+        }
+
+        bool isLeafNode() const {
+            return _valuesByScope.size() > 0;
+        }
+
+        Node *&operator[](int idx) {
+            if (isArrayNode()) {
+                return _indexedSubnodes[idx];
+            } else {
+                throw invalid_argument("Attempt to index into non-array Node");
+            }
+        }
+
+
+    protected:
+        friend class ConfigContext;
+
+        map<string, Node*> mappedSubnodes() { return _mappedSubnodes; }
+        const map<string, Node*> mappedSubnodes() const { return _mappedSubnodes; }
+
+        vector<Node*> indexedSubnodes() { return _indexedSubnodes; }
+        const vector<Node*> indexedSubnodes() const { return _indexedSubnodes; }
+
+    private:
+        map< vector<string>, Json::Value > _valuesByScope;
+
+        //  if this is a parent node
+        map<string, Node*> _mappedSubnodes;
+        vector<Node*> _indexedSubnodes;
+    };
+
+
+
+    void insertTree(const Json::Value &tree) {
+        //  TODO: do it
+    }
+
+
+
 private:
     //  higher index = higher precedence when cascading values
     vector<pair<string, shared_ptr<Json::Value>>> _configTrees;
-    Json::Value _combined;
+    Node _combined;
     QFileSystemWatcher _fsWatcher;
 };
 
@@ -126,18 +178,16 @@ public:
     }
 
 
-    /**
-     * The file to write newly-inserted values to.
-     * 
-     * @param writeToFile the file path
-     */
-    void setWriteToFile(string writeToFile);
+    // *
+    //  * The file to write newly-inserted values to.
+    //  * 
+    //  * @param writeToFile the file path
+    // void setWriteToFile(string writeToFile);
 
 
-protected:
-    friend class ConfigContext;
+// public slots:
+//     void valueChanged(const T &newValue);
 
-    void valueChanged(T newValue);
 
 private:
     string _keyPath;

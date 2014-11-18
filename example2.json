@@ -1,0 +1,10 @@
+{
+    "$2008": {
+        "motion": {
+            "max_accel": 3,
+            "max_vel": 10
+        }
+    },
+    "kick_speed": 8,
+    "chip_power": 10
+}
