@@ -1,4 +1,4 @@
-CConf
+CConf [![Build Status](https://travis-ci.org/justbuchanan/CConf.svg?branch=master)](https://travis-ci.org/justbuchanan/CConf)
 =====
 
 Cascading Configurations Library
