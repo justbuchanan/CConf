@@ -4,7 +4,7 @@ all: CMakeLists.txt
 	cd build; cmake ..; make
 
 run: all
-	build/cconf-test
+	bin/cconf-test
 
 clean:
 	rm -rf build
