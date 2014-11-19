@@ -15,6 +15,7 @@ before_install:
     - ./bootstrap >> bootstrap.log 2>&1
     - make >> make.log 2>&1
     - sudo make install >> install.log 2>&1
+    - cd ..
 
     - sudo apt-get update -qq
     - sudo apt-get install qt5-default gcc-4.7 g++-4.7
