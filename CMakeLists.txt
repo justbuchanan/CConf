@@ -10,6 +10,9 @@ include(ExternalProject)
 #       it complains about position-independent code otherwise
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC")
 
+# put executables in the bin folder
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+
 
 # DEBUG
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
