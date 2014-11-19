@@ -180,7 +180,7 @@ public:
 
     void addFile(const string &path) {
         if (containsFile(path)) {
-            throw "this config file is already loaded";
+            throw invalid_argument("The given file is already present in the context" + path);
         }
 
         Json::Value tree;
@@ -199,7 +199,7 @@ public:
         _fsWatcher.addPath(QString::fromStdString(path));
     }
 
-    void readFile(const string &filePath, Json::Value jsonOut) {
+    void readFile(const string &filePath, Json::Value &jsonOut) {
         ifstream doc(filePath);
         Json::Reader reader;
         if (!reader.parse(doc, jsonOut)) {
@@ -396,16 +396,12 @@ protected:
      */
     void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
         if (node->isLeafNode() == (json.type() == Json::objectValue)) {
-            string msg = "Attempt to merge a tree and a leaf at key path: ";
-            msg += node->keyPath();
-            throw TypeMismatchError(msg);
+            throw TypeMismatchError("Attempt to merge a tree and a leaf at key path '" + node->keyPath() + "'.");
         }
 
 
         if (node->isLeafNode()) {
             throw invalid_argument("TODO");
-
-            
             
         } else {
             BranchNode *parentNode = (BranchNode *)node;
