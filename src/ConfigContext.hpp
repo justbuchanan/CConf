@@ -18,18 +18,6 @@ using namespace std;
 
 namespace CConf {
 
-/*
-class TreePath {
-public:
-    /// @param path A dot-separated key path
-    TreePath(string path);
-
-private:
-    vector<string> _components;
-};
-*/
-
-
 
 /**
  * @brief Error that occurs when loading a json file creates a type mismatch between nodes.
@@ -40,41 +28,31 @@ private:
  */
 class TypeMismatchError : public runtime_error {
 public:
-    TypeMismatchError(const char *what) : runtime_error(what) {}
+    TypeMismatchError(const string &what) : runtime_error(what) {}
 };
 
 
 
 class Context;
+class BranchNode;
 
 
 class Node {
 public:
-    Node(Node *parent = nullptr) {
-        _parent = parent;
-    }
-
-    ~Node() {
-        if (_parent) delete _parent;
-    }
-
-    bool isMapNode() const {
-        return _mappedSubnodes.size() > 0;
-    }
+    Node(BranchNode *parent = nullptr);
+    ~Node();
 
     virtual bool isLeafNode() const = 0;
 
-    // Node *&operator[](int idx) {
-    //     if (isArrayNode()) {
-    //         return _indexedSubnodes[idx];
-    //     } else {
-    //         throw invalid_argument("Attempt to index into non-array Node");
-    //     }
-    // }
 
+    void _prependKeyPath(string &keyPathOut) const;
 
-    //  Methods for QAbstractItemModel
-    ////////////////////////////////////////////////////////////////////////////////////
+    string keyPath() const {
+        string keyPath;
+        _prependKeyPath(keyPath);
+        return keyPath;
+    }
+
 
     QVariant data(int column) const {
         //  FIXME: implement
@@ -85,58 +63,16 @@ public:
         return 1;   //  FIXME
     }
 
-    int childCount() const {
-        return max(_mappedSubnodes.size(), _indexedSubnodes.size());
-    }
+    virtual int childCount() const = 0;
 
-    Node *_childAtIndex(int index) {
-        if (isMapNode()) {
-            throw invalid_argument("Justin has yet to implement this");
-            auto itr = _mappedSubnodes.begin();
-            return itr->second;
-        } else {
-            throw invalid_argument("Attempt to get child of leaf Node");
-            return nullptr;
-        }
-    }
+    int row();
 
-    int row() {
-        if (_parent) {
-            return _parent->indexOfSubnode(this);
-        } else {
-            return 0;
-        }
-    }
+    BranchNode *parent() { return _parent; }
+    const BranchNode *parent() const { return _parent; }
 
-    int indexOfSubnode(const Node *child) const {
-        if (isMapNode()) {
-            throw invalid_argument("Justin needs to implement this too");
-        } else {
-            throw invalid_argument("Attempt to get ask leaf node about its subnodes");
-        }
-    }
-
-    Node *parent() {
-        return _parent;
-    }
-
-
-protected:
-    friend class Context;
-
-    map<string, Node*> mappedSubnodes() { return _mappedSubnodes; }
-    const map<string, Node*> mappedSubnodes() const { return _mappedSubnodes; }
-
-    vector<Node*> indexedSubnodes() { return _indexedSubnodes; }
-    const vector<Node*> indexedSubnodes() const { return _indexedSubnodes; }
 
 private:
-    map< vector<string>, Json::Value > _valuesByScope;
-
-    //  if this is a parent node
-    map<string, Node*> _mappedSubnodes;
-    vector<Node*> _indexedSubnodes;
-    Node *_parent;
+    BranchNode *_parent;
 };
 
 
@@ -155,8 +91,24 @@ public:
         _subnodes[key];
     }
 
+    Node *_childAtIndex(int index) {
+        throw invalid_argument("Justin has yet to implement this");
+        return nullptr;
+    }
+
+    int childCount() const {
+        return _subnodes.size();
+    }
+
+    int indexOfSubnode(const Node *child) const {
+        throw invalid_argument("TODO");
+        return -1;
+    }
+
+
 protected:
     friend class Context;
+    friend class Node;
 
     map<string, Node*> _subnodes;
 };
@@ -187,6 +139,8 @@ private:
 };
 
 
+////////////////////////////////////////////////////////////////////////////////
+
 
 class LeafNode : public Node {
 public:
@@ -194,6 +148,10 @@ public:
 
     bool isLeafNode() const {
         return true;
+    }
+
+    int childCount() const {
+        return 0;
     }
 
 
@@ -283,7 +241,7 @@ public:
         //  return invalid model index if the request was invalid
         if (!hasIndex(row, column, parent)) return QModelIndex();
 
-        Node *parentNode = parent.isValid() ? static_cast<Node*>(parent.internalPointer()) : _rootNode;
+        BranchNode *parentNode = parent.isValid() ? static_cast<BranchNode*>(parent.internalPointer()) : _rootNode;
 
         Node *childNode = parentNode->_childAtIndex(row);
         return childNode != nullptr ? createIndex(row, column, childNode) : QModelIndex();
@@ -352,8 +310,6 @@ public:
 
 
 
-    //  Deep shit
-    //////////////////////////////////////////////////////////////////////////////////////
 protected:
 
     void _didInsert(const QModelIndex &index) {
@@ -440,12 +396,17 @@ protected:
      */
     void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
         if (node->isLeafNode() == (json.type() == Json::objectValue)) {
-            throw TypeMismatchError("Attempt to merge a tree and a leaf");  //  TODO: give keypath info
+            string msg = "Attempt to merge a tree and a leaf at key path: ";
+            msg += node->keyPath();
+            throw TypeMismatchError(msg);
         }
 
 
         if (node->isLeafNode()) {
             throw invalid_argument("TODO");
+
+            
+            
         } else {
             BranchNode *parentNode = (BranchNode *)node;
 

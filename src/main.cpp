@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
 
     CConf::Context *ctxt = new CConf::Context();
     ctxt->addFile("example.json");
-    ctxt->addFile("example2.json");
+    // ctxt->addFile("example2.json");
 
 
     CConfView *confView = new CConfView();
