@@ -46,4 +46,4 @@ file(GLOB cconf_SRC
 add_executable("cconf-test" ${cconf_SRC})
 add_dependencies(cconf-test jsoncpp-proj)
 target_link_libraries(cconf-test "jsoncpp")
-qt5_use_modules("cconf-test" Widgets)
+qt5_use_modules("cconf-test" Widgets Core)

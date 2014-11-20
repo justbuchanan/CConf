@@ -39,7 +39,7 @@ class BranchNode;
 class Node {
 public:
     Node(BranchNode *parent = nullptr, Context *context = nullptr);
-    ~Node();
+    virtual ~Node();
 
     virtual bool isLeafNode() const = 0;
 
@@ -204,14 +204,14 @@ public:
 
 
     /// returns -1 if the file isn't a part of this context
-    int indexOfFile(const string &path);
+    int indexOfFile(const string &path) const;
 
     /**
      * Find the relative priority of a file.
      * @param filePath Where the file lives
      * @return the relative priority of the file.  Higher values indicate greater importance/priority
      */
-    int priorityOfFile(const string &filePath) {
+    int priorityOfFile(const string &filePath) const {
         return indexOfFile(filePath);
     }
 

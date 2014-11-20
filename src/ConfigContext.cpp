@@ -105,7 +105,7 @@ string BranchNode::keyForSubnode(const Node *subnode) const {
 }
 
 int BranchNode::indexOfSubnode(const Node *child) const {
-    std::find(_subnodeOrder.begin(), _subnodeOrder.end(), keyForSubnode(child)) - _subnodeOrder.begin();
+    return std::find(_subnodeOrder.begin(), _subnodeOrder.end(), keyForSubnode(child)) - _subnodeOrder.begin();
 }
 
 void BranchNode::removeValuesFromFile(const string &filePath) {
@@ -209,7 +209,6 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
     if (node->isLeafNode()) {
         node->removeValuesFromFile(filePath);
         
-        ValueEntry valEntry();
         ((LeafNode *)node)->addValue(variantValueFromJson(json), filePath, scope);
     } else {
         BranchNode *parentNode = (BranchNode *)node;
@@ -328,7 +327,7 @@ void Context::removeFile(const string &filePath) {
     }
 }
 
-int Context::indexOfFile(const string &filePath) {
+int Context::indexOfFile(const string &filePath) const {
     auto itr = std::find(_configFiles.begin(), _configFiles.end(), filePath);
     return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
 }
