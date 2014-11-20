@@ -65,7 +65,7 @@ public:
 
     virtual int childCount() const = 0;
 
-    int row();
+    virtual int row();
 
     BranchNode *parent() { return _parent; }
     const BranchNode *parent() const { return _parent; }
@@ -117,25 +117,28 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////
 
 
-class ValueNode : public Node {
+class ValueEntry {
 public:
-    ValueNode(BranchNode *parent, const QVariant &value) : Node(parent) {}
+    ValueEntry(const QVariant &value, const string &filePath, const vector<string> &scope = vector<string>()) {
+        _value = value;
+        _filePath = filePath;
+        _scope = scope;
+    }
 
     const bool isDefaultScope() const {
         return _scope.size() == 0;
     }
 
-    const vector<string> &scope() const {
-        return _scope;
-    }
+    const vector<string> &scope() const { return _scope; }
+    const string &filePath() const { return _filePath; }
 
     const QVariant &value() const { return _value; }
-    QVariant &value() { return _value; }
+    // QVariant &value() { return _value; }
 
 private:
-    vector<string> _scope;
-    string _filePath;
     QVariant _value;
+    string _filePath;
+    vector<string> _scope;
 };
 
 
@@ -151,14 +154,16 @@ public:
     }
 
     int childCount() const {
-        return 0;
+        return 0;   //  FIXME
     }
 
 
-private:
-    vector<ValueNode> _valueNodes;
-};
 
+
+
+private:
+    vector<ValueEntry> _values;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -348,14 +353,12 @@ protected:
     }
 
 
-    //  TODO: replace std::find() calls with container.find()
-
     /**
      * Anything that isn't a json 'object' type is stored in the tree in a leaf node as a QVariant.
      * This method creates the corresponding QVariant from a json value.
      * See <json/value.h> for a list of available types
      */
-    QVariant variantValueFromJson(const Json::Value &json) {
+    static QVariant variantValueFromJson(const Json::Value &json) {
         switch (json.type()) {
             case Json::nullValue: return QVariant();
             case Json::intValue: return QVariant(json.asInt());
@@ -401,8 +404,10 @@ protected:
 
 
         if (node->isLeafNode()) {
-            throw invalid_argument("TODO");
+            node->removeValuesFromFile(filePath);
             
+            ValueEntry valEntry(variantValueFromJson(json), filePath, scope);
+            (LeafNode *)->_values.push_back(valEntry);
         } else {
             BranchNode *parentNode = (BranchNode *)node;
 
@@ -501,13 +506,6 @@ public:
     const string &comment() const {
         return _comment;
     }
-
-
-    // *
-    //  * The file to write newly-inserted values to.
-    //  * 
-    //  * @param writeToFile the file path
-    // void setWriteToFile(string writeToFile);
 
 
 // public slots:
