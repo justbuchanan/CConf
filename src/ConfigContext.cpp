@@ -1,15 +1,31 @@
 #include "ConfigContext.hpp"
 
 
-CConf::Node::Node(BranchNode *parent) {
+namespace CConf {
+
+
+/**
+ * Extracts all of the keys from the given map and puts them in the @keysOut set
+ */
+template<typename KeyType, typename ValueType>
+void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> &keysOut) {
+    for (auto itr : theMap) {
+        keysOut.insert(itr.first);
+    }
+}
+
+
+#pragma mark Node
+
+Node::Node(BranchNode *parent) {
     _parent = parent;
 }
 
-CConf::Node::~Node() {
+Node::~Node() {
     delete _parent;
 }
 
-int CConf::Node::row() {
+int Node::row() {
     if (_parent) {
         return _parent->indexOfSubnode(this);
     } else {
@@ -17,15 +33,319 @@ int CConf::Node::row() {
     }
 }
 
-void CConf::Node::_prependKeyPath(string &keyPathOut) const {
+void Node::_prependKeyPath(string &keyPathOut) const {
     if (_parent) {
         keyPathOut.insert(0, ".");
-        for (auto itr : _parent->_subnodes) {
-            if (itr.second == this) {
-                keyPathOut.insert(0, itr.first);
-                break;
-            }
-        }
+        keyPathOut.insert(0, _parent->keyForSubnode(this));
         _parent->_prependKeyPath(keyPathOut);
     }
 }
+
+string Node::keyPath() const {
+    string keyPath;
+    _prependKeyPath(keyPath);
+    return keyPath;
+}
+
+QVariant Node::data(int column) const {
+    if (column == 0) {
+        return QVariant(QString::fromStdString((_parent != nullptr) ? _parent->keyForSubnode(this) : "CConf Root"));
+    }
+
+    throw invalid_argument("Implement data() for column > 0");
+}
+
+int Node::columnCount() const {
+    return 1;   //  FIXME
+}
+
+
+
+#pragma mark BranchNode
+
+
+bool BranchNode::isLeafNode() const {
+    return false;
+}
+
+Node *BranchNode::operator[](const string &key) {
+    return _subnodes[key];
+}
+
+Node *BranchNode::_childAtIndex(int index) {
+    return _subnodes[ _subnodeOrder[index] ];
+}
+
+int BranchNode::childCount() const {
+    return _subnodes.size();
+}
+
+void BranchNode::addSubnode(Node *node, const string &key) {
+    if (_subnodes[key] != nullptr) throw invalid_argument("Attempt to add subnode for key that already exists: '" + key + "'");
+
+    _subnodeOrder.push_back(key);
+    std::sort(_subnodeOrder.begin(), _subnodeOrder.end());
+
+    _subnodes[key] = node;
+}
+
+void BranchNode::removeSubnode(const string &key) {
+    _subnodeOrder.erase(std::find(_subnodeOrder.begin(), _subnodeOrder.end(), key));
+
+    Node *node = _subnodes[key];
+    _subnodes.erase(key);
+    delete node;
+}
+
+void BranchNode::getSubnodeKeys(set<string> keysOut) {
+    getMapKeys<string, Node*>(_subnodes, keysOut);
+}
+
+string BranchNode::keyForSubnode(const Node *subnode) const {
+    for (auto itr : _subnodes) {
+        if (itr.second == subnode) {
+            return itr.first;
+        }
+    }
+
+    throw invalid_argument("keyForSubnode() called for node that isn't a subnode");
+}
+
+int BranchNode::indexOfSubnode(const Node *child) const {
+    std::find(_subnodeOrder.begin(), _subnodeOrder.end(), keyForSubnode(child)) - _subnodeOrder.begin();
+}
+
+void BranchNode::removeValuesFromFile(const string &filePath) {
+    for (auto itr : _subnodes) {
+        itr.second->removeValuesFromFile(filePath);
+    }
+}
+
+
+
+#pragma mark LeafNode
+
+void LeafNode::removeValuesFromFile(const string &filePath) {
+    for (int i = 0; i < _values.size();) {
+        if (_values[i].filePath() == filePath) _values.erase(_values.begin() + i);
+        else i++;
+    }
+}
+
+void LeafNode::addValue(const QVariant &val, const string &filePath, const vector<string> &scope) {
+    _values.push_back(ValueEntry(val, filePath, scope));
+}
+
+
+
+#pragma mark Context
+
+void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
+    if (node->isLeafNode() == (json.type() == Json::objectValue)) {
+        throw TypeMismatchError("Attempt to merge a tree and a leaf at key path '" + node->keyPath() + "'.");
+    }
+
+
+    if (node->isLeafNode()) {
+        node->removeValuesFromFile(filePath);
+        
+        ValueEntry valEntry();
+        ((LeafNode *)node)->addValue(variantValueFromJson(json), filePath, scope);
+    } else {
+        BranchNode *parentNode = (BranchNode *)node;
+
+        set<string> existingKeys;
+        parentNode->getSubnodeKeys(existingKeys);
+
+        for (Json::ValueIterator itr = json.begin(); itr != json.end(); itr++) {
+            string jsonKey = itr.key().asString();
+
+            if (existingKeys.find(jsonKey) != existingKeys.end()) {
+                existingKeys.erase(jsonKey);
+            } else {
+                Node *newChildNode;
+                if (itr->type() == Json::objectValue) {
+                    newChildNode = new BranchNode(parentNode);
+                } else {
+                    newChildNode = new LeafNode(parentNode);
+                }
+                parentNode->addSubnode(newChildNode, jsonKey);
+
+                cout << "Appended new node for key: " << jsonKey << endl;
+            }
+
+            mergeJson((*parentNode)[jsonKey], *itr, scope, filePath);
+        }
+
+        //  other keys under this branch that this json didn't have anything for
+        for (auto key : existingKeys) {
+            (*parentNode)[key]->removeValuesFromFile(filePath);
+        }
+    }
+}
+
+QVariant Context::variantValueFromJson(const Json::Value &json) {
+    switch (json.type()) {
+        case Json::nullValue: return QVariant();
+        case Json::intValue: return QVariant(json.asInt());
+        case Json::uintValue: return QVariant(json.asUInt());
+        case Json::realValue: return QVariant(json.asDouble());
+        case Json::stringValue: return QVariant(QString::fromStdString(json.asString()));
+        case Json::booleanValue: return QVariant(json.asBool());
+        case Json::arrayValue:
+        {
+            QList<QVariant> lst;
+            for (auto itr : json) {
+                lst.append(variantValueFromJson(itr));
+            }
+            return QVariant(lst);
+        }
+        default:
+            throw invalid_argument("Invalid json value passed to variantValueFromJson()");  //  TODO: more info
+            return QVariant();
+    }
+}
+
+
+bool Context::keyIsJsonScopeSpecifier(const string &key) {
+    return key.length() >= 3 && key[0] == '$' && key[1] == '$';
+}
+
+
+
+Context::Context() {
+    QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &Context::fileChanged);
+
+    _rootNode = new BranchNode();
+}
+
+void Context::fileChanged(const QString &filePath) {
+    cout << "Context file changed: " << filePath.toStdString() << endl;
+}
+
+void Context::addFile(const string &path) {
+    if (containsFile(path)) {
+        throw invalid_argument("The given file is already present in the context" + path);
+    }
+
+    Json::Value tree;
+    readFile(path, tree);   //  note: throws an exception on failure
+
+    try {
+        vector<string>scope;
+        mergeJson(_rootNode, tree, scope, path);
+    } catch (TypeMismatchError e) {
+        cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
+        cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
+        throw e;
+    }
+
+    _configFiles.push_back(path);
+    _fsWatcher.addPath(QString::fromStdString(path));
+}
+
+void Context::readFile(const string &filePath, Json::Value &jsonOut) {
+    ifstream doc(filePath);
+    Json::Reader reader;
+    if (!reader.parse(doc, jsonOut)) {
+        throw runtime_error("failed to parse json: " + reader.getFormattedErrorMessages());
+    }
+}
+
+
+bool Context::containsFile(const string &path) {
+    return indexOfFile(path) != -1;
+}
+
+
+void Context::removeFile(const string &filePath) {
+    int idx = indexOfFile(filePath);
+    if (idx == -1) {
+        cerr << "Warning: Attempt to remove file from Context that's not in the context: " << filePath;
+    } else {
+        _configFiles.erase(_configFiles.begin() + idx);
+        _fsWatcher.removePath(QString::fromStdString(filePath));
+    }
+}
+
+int Context::indexOfFile(const string &filePath) {
+    auto itr = std::find(_configFiles.begin(), _configFiles.end(), filePath);
+    return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
+}
+
+
+
+#pragma mark Context - Item Model
+
+QModelIndex Context::index(int row, int column, const QModelIndex &parent) const {
+    //  return invalid model index if the request was invalid
+    if (!hasIndex(row, column, parent)) return QModelIndex();
+
+    BranchNode *parentNode = parent.isValid() ? static_cast<BranchNode*>(parent.internalPointer()) : _rootNode;
+
+    Node *childNode = parentNode->_childAtIndex(row);
+    return childNode != nullptr ? createIndex(row, column, childNode) : QModelIndex();
+}
+
+QModelIndex Context::parent(const QModelIndex &child) const {
+    if (!child.isValid()) return QModelIndex();
+
+    Node *childNode = static_cast<Node*>(child.internalPointer());
+    BranchNode *parentNode = childNode->parent();
+
+    if (parentNode == _rootNode) return QModelIndex();
+
+    return createIndex(parentNode->row(), 0, parentNode);
+}
+
+
+int Context::rowCount(const QModelIndex &parent) const {
+    const Node *parentNode;
+    if (parent.column() > 0) return 0;
+
+    if (!parent.isValid()) {
+        parentNode = _rootNode;
+    } else {
+        parentNode = static_cast<const Node*>(parent.internalPointer());
+    }
+
+    return parentNode->childCount();
+}
+
+
+int Context::columnCount(const QModelIndex &parent) const {
+    if (parent.isValid()) {
+        return static_cast<const Node*>(parent.internalPointer())->columnCount();
+    } else {
+        return _rootNode->columnCount();
+    }
+}
+
+
+QVariant Context::data(const QModelIndex &index, int role) const {
+    if (!index.isValid()) return QVariant();
+
+    if (role != Qt::DisplayRole) return QVariant();
+
+    const Node *node = static_cast<const Node*>(index.internalPointer());
+    return node->data(index.column());
+}
+
+
+Qt::ItemFlags Context::flags(const QModelIndex &index) const {
+    if (!index.isValid()) return 0;
+
+    return Qt::ItemIsEnabled | Qt::ItemIsSelectable;    //  FIXME: this is readonly - eventually we'll make it readwrite
+}
+
+
+QVariant Context::headerData(int section, Qt::Orientation orientation, int role) const {
+    if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
+        return "CConf";
+    }
+
+    return QVariant();
+}
+
+
+}; //   end namespace CConf

@@ -44,27 +44,13 @@ public:
 
     virtual bool isLeafNode() const = 0;
 
+    virtual void removeValuesFromFile(const string &filePath) = 0;
 
-    void _prependKeyPath(string &keyPathOut) const;
+    string keyPath() const;
 
-    string keyPath() const {
-        string keyPath;
-        _prependKeyPath(keyPath);
-        return keyPath;
-    }
-
-
-    QVariant data(int column) const {
-        //  FIXME: implement
-        return "Data";
-    }
-
-    int columnCount() const {
-        return 1;   //  FIXME
-    }
-
+    QVariant data(int column) const;
+    int columnCount() const;
     virtual int childCount() const = 0;
-
     virtual int row();
 
     BranchNode *parent() { return _parent; }
@@ -72,6 +58,8 @@ public:
 
 
 private:
+    void _prependKeyPath(string &keyPathOut) const;
+
     BranchNode *_parent;
 };
 
@@ -83,33 +71,27 @@ class BranchNode : public Node {
 public:
     BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
 
-    bool isLeafNode() const {
-        return false;
-    }
+    bool isLeafNode() const;
+    int childCount() const;
 
-    Node *&operator[](const string &key) {
-        _subnodes[key];
-    }
+    Node *operator[](const string &key);
+    Node *_childAtIndex(int index);
+    int indexOfSubnode(const Node *child) const;
 
-    Node *_childAtIndex(int index) {
-        throw invalid_argument("Justin has yet to implement this");
-        return nullptr;
-    }
+    void removeValuesFromFile(const string &filePath);
 
-    int childCount() const {
-        return _subnodes.size();
-    }
+    void getSubnodeKeys(set<string> keysOut);
 
-    int indexOfSubnode(const Node *child) const {
-        throw invalid_argument("TODO");
-        return -1;
-    }
-
+    string keyForSubnode(const Node *subnode) const;
 
 protected:
     friend class Context;
-    friend class Node;
 
+    void addSubnode(Node *node, const string &key);
+    void removeSubnode(const string &key);
+
+protected:
+    vector<string> _subnodeOrder; //  alphabetically ordered keys
     map<string, Node*> _subnodes;
 };
 
@@ -157,8 +139,9 @@ public:
         return 0;   //  FIXME
     }
 
+    void removeValuesFromFile(const string &filePath);
 
-
+    void addValue(const QVariant &val, const string &filePath, const vector<string> &scope = vector<string>());
 
 
 private:
@@ -173,146 +156,33 @@ class Context : public QAbstractItemModel {
     Q_OBJECT
 
 public:
-    Context() {
-        QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &Context::fileChanged);
+    Context();
 
-        _rootNode = new BranchNode();
-    }
+    void fileChanged(const QString &filePath);
 
-    void fileChanged(const QString &filePath) {
-        cout << "Context file changed: " << filePath.toStdString() << endl;
-    }
+    void addFile(const string &path);
 
-    void addFile(const string &path) {
-        if (containsFile(path)) {
-            throw invalid_argument("The given file is already present in the context" + path);
-        }
+    void readFile(const string &filePath, Json::Value &jsonOut);
 
-        Json::Value tree;
-        readFile(path, tree);   //  note: throws an exception on failure
+    bool containsFile(const string &path);
 
-        try {
-            vector<string>scope;
-            mergeJson(_rootNode, tree, scope, path);
-        } catch (TypeMismatchError e) {
-            cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
-            cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
-            throw e;
-        }
-
-        _configFiles.push_back(path);
-        _fsWatcher.addPath(QString::fromStdString(path));
-    }
-
-    void readFile(const string &filePath, Json::Value &jsonOut) {
-        ifstream doc(filePath);
-        Json::Reader reader;
-        if (!reader.parse(doc, jsonOut)) {
-            throw runtime_error("failed to parse json: " + reader.getFormattedErrorMessages());
-        }
-    }
-
-
-    bool containsFile(const string &path) {
-        return indexOfFile(path) != -1;
-    }
-
-
-    void removeFile(const string &filePath) {
-        int idx = indexOfFile(filePath);
-        if (idx == -1) {
-            cerr << "Warning: Attempt to remove file from Context that's not in the context: " << filePath;
-        } else {
-            _configFiles.erase(_configFiles.begin() + idx);
-            _fsWatcher.removePath(QString::fromStdString(filePath));
-        }
-    }
+    void removeFile(const string &filePath);
 
 
     /// returns -1 if the file isn't a part of this context
-    int indexOfFile(const string &path) {
-        auto itr = std::find(_configFiles.begin(), _configFiles.end(), path);
-        return (itr == _configFiles.end()) ? -1 : itr - _configFiles.begin();
-    }
+    int indexOfFile(const string &path);
 
 
-    #pragma mark - QAbstractItemModel Stuff -
-
+    //  Methods for QAbstractModel
     //  see the article on Qt's website for more info on how to subclass QAbstractItemModel
     //  http://qt-project.org/doc/qt-4.8/itemviews-simpletreemodel.html
-
-
-    QModelIndex index(int row, int column, const QModelIndex &parent) const {
-        //  return invalid model index if the request was invalid
-        if (!hasIndex(row, column, parent)) return QModelIndex();
-
-        BranchNode *parentNode = parent.isValid() ? static_cast<BranchNode*>(parent.internalPointer()) : _rootNode;
-
-        Node *childNode = parentNode->_childAtIndex(row);
-        return childNode != nullptr ? createIndex(row, column, childNode) : QModelIndex();
-    }
-
-    QModelIndex parent(const QModelIndex &child) const {
-        if (!child.isValid()) return QModelIndex();
-
-        Node *childNode = static_cast<Node*>(child.internalPointer());
-        Node *parentNode = childNode->parent();
-
-        if (parentNode == _rootNode) return QModelIndex();
-
-        return createIndex(parentNode->row(), 0, parentNode);
-    }
-
-
-    int rowCount(const QModelIndex &parent = QModelIndex()) const {
-        const Node *parentNode;
-        if (parent.column() > 0) return 0;
-
-        if (!parent.isValid()) {
-            parentNode = _rootNode;
-        } else {
-            parentNode = static_cast<const Node*>(parent.internalPointer());
-        }
-
-        return parentNode->childCount();
-    }
-
-
-    int columnCount(const QModelIndex &parent = QModelIndex()) const {
-        if (parent.isValid()) {
-            return static_cast<const Node*>(parent.internalPointer())->columnCount();
-        } else {
-            return _rootNode->columnCount();
-        }
-    }
-
-
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const {
-        if (!index.isValid()) return QVariant();
-
-        if (role != Qt::DisplayRole) return QVariant();
-
-        const Node *node = static_cast<const Node*>(index.internalPointer());
-        return node->data(index.column());
-    }
-
-
-    Qt::ItemFlags flags(const QModelIndex &index) const {
-        if (!index.isValid()) return 0;
-
-        return Qt::ItemIsEnabled | Qt::ItemIsSelectable;    //  FIXME: this is readonly - eventually we'll make it readwrite
-    }
-
-
-    QVariant headerData(int section, Qt::Orientation orientation, int role) const {
-        if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-            return "CConf";
-        }
-
-        return QVariant();
-    }
-
-
+    QModelIndex index(int row, int column, const QModelIndex &parent) const;
+    QModelIndex parent(const QModelIndex &child) const;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
+    Qt::ItemFlags flags(const QModelIndex &index) const;
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
 
 
 protected:
@@ -337,20 +207,7 @@ protected:
      * @param key the json key string
      * @return whether or not it's a scope specifier
      */
-    bool keyIsJsonScopeSpecifier(const string &key) {
-        return key.length() >= 3 && key[0] == '$' && key[1] == '$';
-    }
-
-
-    /**
-     * Extracts all of the keys from the given map and puts them in the @keysOut set
-     */
-    template<typename KeyType, typename ValueType>
-    void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> &keysOut) {
-        for (auto itr : theMap) {
-            keysOut.insert(itr.first);
-        }
-    }
+    bool keyIsJsonScopeSpecifier(const string &key);
 
 
     /**
@@ -358,27 +215,7 @@ protected:
      * This method creates the corresponding QVariant from a json value.
      * See <json/value.h> for a list of available types
      */
-    static QVariant variantValueFromJson(const Json::Value &json) {
-        switch (json.type()) {
-            case Json::nullValue: return QVariant();
-            case Json::intValue: return QVariant(json.asInt());
-            case Json::uintValue: return QVariant(json.asUInt());
-            case Json::realValue: return QVariant(json.asDouble());
-            case Json::stringValue: return QVariant(QString::fromStdString(json.asString()));
-            case Json::booleanValue: return QVariant(json.asBool());
-            case Json::arrayValue:
-            {
-                QList<QVariant> lst;
-                for (auto itr : json) {
-                    lst.append(variantValueFromJson(itr));
-                }
-                return QVariant(lst);
-            }
-            default:
-                throw invalid_argument("Invalid json value passed to variantValueFromJson()");  //  TODO: more info
-                return QVariant();
-        }
-    }
+    static QVariant variantValueFromJson(const Json::Value &json);
 
 
     /**
@@ -397,63 +234,11 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
-        if (node->isLeafNode() == (json.type() == Json::objectValue)) {
-            throw TypeMismatchError("Attempt to merge a tree and a leaf at key path '" + node->keyPath() + "'.");
-        }
-
-
-        if (node->isLeafNode()) {
-            node->removeValuesFromFile(filePath);
-            
-            ValueEntry valEntry(variantValueFromJson(json), filePath, scope);
-            (LeafNode *)->_values.push_back(valEntry);
-        } else {
-            BranchNode *parentNode = (BranchNode *)node;
-
-            set<string> existingKeys;
-            getMapKeys<string, Node*>(parentNode->_subnodes, existingKeys);
-
-            for (Json::ValueIterator itr = json.begin(); itr != json.end(); itr++) {
-                string jsonKey = itr.key().asString();
-
-                if (existingKeys.find(jsonKey) != existingKeys.end()) {
-                    existingKeys.erase(jsonKey);
-                } else {
-                    Node *newChildNode;
-                    if (itr->type() == Json::objectValue) {
-                        newChildNode = new BranchNode(parentNode);
-                    } else {
-                        newChildNode = new LeafNode(parentNode);
-                    }
-                    parentNode->_subnodes[jsonKey] = newChildNode;
-
-                    cout << "Appended new node for key: " << jsonKey << endl;
-                }
-
-                mergeJson(parentNode->_subnodes[jsonKey], *itr, scope, filePath);
-            }
-
-            //  other keys under this branch that this json didn't have anything for
-            for (auto key : existingKeys) {
-                removeValuesFromFile(parentNode->_subnodes[key], filePath);
-            }
-        }
-    }
+    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath);
 
 
     /**
-     * @brief When we remove a file from the context, we need to remove the values from the tree
-     * 
-     * @param filePath the path of the file we're removing
-     */
-    void removeValuesFromFile(Node *node, const string &filePath) {
-        throw invalid_argument("TODO");
-    }
-
-
-    /**
-     * Find the relative priority of a file.  Used when merging to determine whether or not to overwrite a value.
+     * Find the relative priority of a file.
      * @param filePath Where the file lives
      * @return the relative priority of the file.  Higher values indicate greater importance/priority
      */
@@ -508,10 +293,6 @@ public:
     }
 
 
-// public slots:
-//     void valueChanged(const T &newValue);
-
-
 private:
     string _keyPath;
     T _value;
@@ -519,7 +300,6 @@ private:
     string _comment;
     shared_ptr<Context> _context;
 };
-
 
 
 
