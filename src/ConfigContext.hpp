@@ -9,7 +9,6 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
-#include <algorithm>
 #include <QFileSystemWatcher>
 #include <QAbstractItemModel>
 
@@ -39,7 +38,7 @@ class BranchNode;
 
 class Node {
 public:
-    Node(BranchNode *parent = nullptr);
+    Node(BranchNode *parent = nullptr, Context *context = nullptr);
     ~Node();
 
     virtual bool isLeafNode() const = 0;
@@ -48,18 +47,36 @@ public:
 
     string keyPath() const;
 
-    QVariant data(int column) const;
-    int columnCount() const;
+    virtual QVariant data(int column) const = 0;
+    virtual int columnCount() const = 0;
     virtual int childCount() const = 0;
     virtual int row();
 
     BranchNode *parent() { return _parent; }
     const BranchNode *parent() const { return _parent; }
 
+    const Context *context() const {
+        return _context;
+    }
+
+
+protected:
+    friend class BranchNode;
+    friend class LeafNode;
+
+    void setContext(Context *context) {
+        _context = context;
+    }
+
+    Context *context() {
+        return _context;
+    }
+
 
 private:
     void _prependKeyPath(string &keyPathOut) const;
 
+    Context *_context;
     BranchNode *_parent;
 };
 
@@ -69,10 +86,13 @@ private:
 
 class BranchNode : public Node {
 public:
-    BranchNode(BranchNode *parent = nullptr) : Node(parent) {}
+    BranchNode(BranchNode *parent = nullptr, Context *context = nullptr) : Node(parent, context) {}
 
     bool isLeafNode() const;
     int childCount() const;
+
+    int columnCount() const;
+    QVariant data(int column) const;
 
     Node *operator[](const string &key);
     Node *_childAtIndex(int index);
@@ -129,7 +149,7 @@ private:
 
 class LeafNode : public Node {
 public:
-    LeafNode(BranchNode *parent = nullptr) : Node(parent) {}
+    LeafNode(BranchNode *parent = nullptr, Context *context = nullptr) : Node(parent, context) {}
 
     bool isLeafNode() const {
         return true;
@@ -139,9 +159,23 @@ public:
         return 0;   //  FIXME
     }
 
+    int columnCount() const;
+    QVariant data(int column) const;
+
     void removeValuesFromFile(const string &filePath);
 
     void addValue(const QVariant &val, const string &filePath, const vector<string> &scope = vector<string>());
+
+    /**
+     * @brief Get the QVariant value of this leaf with the highest priority
+     *
+     * @details You can optionally specify the scope and/or filePath to refine the query.
+     * @param scope The scope you want to search in.  If no value is present for this exact scope,
+     * it searches subscopes.  Passing an empty scope vector searches the default scope.
+     * @param filepath The path of the file that the value should come from
+     * @return A QVariant* containing the value.  If no value matches the query, returns nullptr
+     */
+    const QVariant *getValue(const vector<string> &scope = vector<string>(), const string &filePath = "") const;
 
 
 private:
@@ -171,6 +205,15 @@ public:
 
     /// returns -1 if the file isn't a part of this context
     int indexOfFile(const string &path);
+
+    /**
+     * Find the relative priority of a file.
+     * @param filePath Where the file lives
+     * @return the relative priority of the file.  Higher values indicate greater importance/priority
+     */
+    int priorityOfFile(const string &filePath) {
+        return indexOfFile(filePath);
+    }
 
 
     //  Methods for QAbstractModel
@@ -235,16 +278,6 @@ protected:
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
     void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath);
-
-
-    /**
-     * Find the relative priority of a file.
-     * @param filePath Where the file lives
-     * @return the relative priority of the file.  Higher values indicate greater importance/priority
-     */
-    int priorityOfFile(const string &filePath) {
-        return indexOfFile(filePath);
-    }
 
 
     /**

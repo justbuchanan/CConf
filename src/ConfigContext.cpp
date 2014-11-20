@@ -1,4 +1,5 @@
 #include "ConfigContext.hpp"
+#include <algorithm>
 
 
 namespace CConf {
@@ -17,8 +18,9 @@ void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> &keysOut) {
 
 #pragma mark Node
 
-Node::Node(BranchNode *parent) {
+Node::Node(BranchNode *parent, Context *context) {
     _parent = parent;
+    _context = context;
 }
 
 Node::~Node() {
@@ -45,18 +47,6 @@ string Node::keyPath() const {
     string keyPath;
     _prependKeyPath(keyPath);
     return keyPath;
-}
-
-QVariant Node::data(int column) const {
-    if (column == 0) {
-        return QVariant(QString::fromStdString((_parent != nullptr) ? _parent->keyForSubnode(this) : "CConf Root"));
-    }
-
-    throw invalid_argument("Implement data() for column > 0");
-}
-
-int Node::columnCount() const {
-    return 1;   //  FIXME
 }
 
 
@@ -87,12 +77,15 @@ void BranchNode::addSubnode(Node *node, const string &key) {
     std::sort(_subnodeOrder.begin(), _subnodeOrder.end());
 
     _subnodes[key] = node;
+
+    node->setContext(context());
 }
 
 void BranchNode::removeSubnode(const string &key) {
     _subnodeOrder.erase(std::find(_subnodeOrder.begin(), _subnodeOrder.end(), key));
 
     Node *node = _subnodes[key];
+    node->setContext(nullptr);
     _subnodes.erase(key);
     delete node;
 }
@@ -121,6 +114,18 @@ void BranchNode::removeValuesFromFile(const string &filePath) {
     }
 }
 
+int BranchNode::columnCount() const {
+    return 1;
+}
+
+QVariant BranchNode::data(int column) const {
+    if (column == 0) {
+        return QVariant(QString::fromStdString((parent() != nullptr) ? parent()->keyForSubnode(this) : "CConf Root"));
+    } else {
+        return "";
+    }
+}
+
 
 
 #pragma mark LeafNode
@@ -134,6 +139,61 @@ void LeafNode::removeValuesFromFile(const string &filePath) {
 
 void LeafNode::addValue(const QVariant &val, const string &filePath, const vector<string> &scope) {
     _values.push_back(ValueEntry(val, filePath, scope));
+}
+
+int LeafNode::columnCount() const {
+    return 2;
+}
+
+QVariant LeafNode::data(int column) const {
+    if (column == 0) {
+        return QVariant(QString::fromStdString((parent() != nullptr) ? parent()->keyForSubnode(this) : "CConf Root"));
+    } else if (column == 1) {
+        const QVariant *val = getValue();
+        return (val != nullptr) ? *val : QVariant(QString("<null>"));
+    } else {
+        throw invalid_argument("Invalid column index for leaf node");
+    }
+}
+
+const QVariant *LeafNode::getValue(const vector<string> &scope, const string &filePath) const {
+    //  TODO: optimize this method - probably by maintaining additional data structures to make this search faster
+
+    bool fileSpecified = filePath.length() > 0;
+
+    vector<ValueEntry *> matchingEntries;
+
+    for (int maxScopeIndex = scope.size() - 1; maxScopeIndex >= -1; maxScopeIndex--) {
+        for (auto entryItr : _values) {
+            // cout << "Examining entry with fp = " << entryItr.filePath() << "; value = " << entryItr.value().toString().toStdString() << endl;
+            if (!fileSpecified || entryItr.filePath() == filePath) {
+                if (entryItr.scope().size() == maxScopeIndex + 1) {
+                    bool found = true;
+                    for (int i = 0; i <=  maxScopeIndex; i++) {
+                        if (entryItr.scope()[i] != scope[i]) {
+                            found = false;
+                            break;
+                        }
+                    }
+                    if (found) matchingEntries.push_back(&entryItr);
+                }
+            }
+        }
+        if (matchingEntries.size() > 0 || (scope.size() == 0 && fileSpecified)) break;
+    }
+
+    if (matchingEntries.size() > 0) {
+        //  sort by file priority
+        std::sort(matchingEntries.begin(), matchingEntries.end(), [&](const ValueEntry *a, const ValueEntry *b) -> bool {
+            return context()->priorityOfFile(a->filePath()) > context()->priorityOfFile(b->filePath());
+        });
+
+        //  value with highest priority
+        return &(matchingEntries.back()->value());
+
+    } else {
+        return nullptr;
+    }
 }
 
 
@@ -216,7 +276,7 @@ bool Context::keyIsJsonScopeSpecifier(const string &key) {
 Context::Context() {
     QObject::connect(&_fsWatcher, &QFileSystemWatcher::fileChanged, this, &Context::fileChanged);
 
-    _rootNode = new BranchNode();
+    _rootNode = new BranchNode(nullptr, this);
 }
 
 void Context::fileChanged(const QString &filePath) {
@@ -314,11 +374,13 @@ int Context::rowCount(const QModelIndex &parent) const {
 
 
 int Context::columnCount(const QModelIndex &parent) const {
-    if (parent.isValid()) {
-        return static_cast<const Node*>(parent.internalPointer())->columnCount();
-    } else {
-        return _rootNode->columnCount();
-    }
+    return 2;
+
+    // if (parent.isValid()) {
+    //     return static_cast<const Node*>(parent.internalPointer())->columnCount();
+    // } else {
+    //     return _rootNode->columnCount();
+    // }
 }
 
 
