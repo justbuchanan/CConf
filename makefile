@@ -8,4 +8,3 @@ run: all
 
 clean:
 	rm -rf build
-

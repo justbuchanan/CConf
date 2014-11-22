@@ -227,6 +227,15 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
 
+    /**
+     * @brief Determine whether the key specifies a (sub)scope rather than a regular keypath
+     * @details Scopes paths are prefixed with '$$', so we check to see if @key has this prefix.
+     * 
+     * @param key the json key string
+     * @return whether or not it's a scope specifier
+     */
+    static bool keyIsJsonScopeSpecifier(const string &key);
+
 
 protected:
 
@@ -242,15 +251,6 @@ protected:
         //  FIXME: emit, notify
     }
 
-
-    /**
-     * @brief Determine whether the key specifies a (sub)scope rather than a regular keypath
-     * @details Scopes paths are prefixed with '$$', so we check to see if @key has this prefix.
-     * 
-     * @param key the json key string
-     * @return whether or not it's a scope specifier
-     */
-    bool keyIsJsonScopeSpecifier(const string &key);
 
 
     /**

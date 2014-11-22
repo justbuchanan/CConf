@@ -1,5 +1,6 @@
 #include "ConfigContext.hpp"
 #include <algorithm>
+#include <cassert>
 
 
 namespace CConf {
@@ -201,6 +202,12 @@ const QVariant *LeafNode::getValue(const vector<string> &scope, const string &fi
 #pragma mark Context
 
 void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
+    assert(node != nullptr);
+
+
+    //  FIXME: when scopes happen, we end up removing too much stuff.  this method needs to have an outVar for "keys handled"
+
+
     if (node->isLeafNode() == (json.type() == Json::objectValue)) {
         throw TypeMismatchError("Attempt to merge a tree and a leaf at key path '" + node->keyPath() + "'.");
     }
@@ -208,7 +215,7 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
 
     if (node->isLeafNode()) {
         node->removeValuesFromFile(filePath);
-        
+
         ((LeafNode *)node)->addValue(variantValueFromJson(json), filePath, scope);
     } else {
         BranchNode *parentNode = (BranchNode *)node;
@@ -219,7 +226,12 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
         for (Json::ValueIterator itr = json.begin(); itr != json.end(); itr++) {
             string jsonKey = itr.key().asString();
 
-            if (existingKeys.find(jsonKey) != existingKeys.end()) {
+            //  handle scopes
+            if (keyIsJsonScopeSpecifier(jsonKey)) {
+                scope.push_back(jsonKey);
+                mergeJson(node, json[jsonKey], scope, filePath);
+                scope.pop_back();
+            } else if (existingKeys.find(jsonKey) != existingKeys.end()) {
                 existingKeys.erase(jsonKey);
             } else {
                 Node *newChildNode;
