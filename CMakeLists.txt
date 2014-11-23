@@ -34,6 +34,7 @@ ExternalProject_Add(jsoncpp-proj
     GIT_REPOSITORY git://github.com/open-source-parsers/jsoncpp
     GIT_TAG master
     INSTALL_COMMAND "" # prevent global install
+    UPDATE_COMMAND ""
 )
 link_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj-build/lib)
 include_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj/include)

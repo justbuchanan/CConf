@@ -277,7 +277,7 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath);
+    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath, set<string> &unhandledKeys, bool removeValuesForUnhandledKeys = true);
 
 
     /**

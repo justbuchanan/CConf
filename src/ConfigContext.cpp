@@ -201,11 +201,11 @@ const QVariant *LeafNode::getValue(const vector<string> &scope, const string &fi
 
 #pragma mark Context
 
-void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath) {
+/**
+ * Remove keys that are merged from the @unhandledKeys set
+ */
+void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath, set<string> &unhandledKeys, bool removeValuesForUnhandledKeys) {
     assert(node != nullptr);
-
-
-    //  FIXME: when scopes happen, we end up removing too much stuff.  this method needs to have an outVar for "keys handled"
 
 
     if (node->isLeafNode() == (json.type() == Json::objectValue)) {
@@ -214,14 +214,11 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
 
 
     if (node->isLeafNode()) {
-        node->removeValuesFromFile(filePath);
+        if (removeValuesForUnhandledKeys) node->removeValuesFromFile(filePath);
 
         ((LeafNode *)node)->addValue(variantValueFromJson(json), filePath, scope);
     } else {
         BranchNode *parentNode = (BranchNode *)node;
-
-        set<string> existingKeys;
-        parentNode->getSubnodeKeys(existingKeys);
 
         for (Json::ValueIterator itr = json.begin(); itr != json.end(); itr++) {
             string jsonKey = itr.key().asString();
@@ -229,28 +226,35 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
             //  handle scopes
             if (keyIsJsonScopeSpecifier(jsonKey)) {
                 scope.push_back(jsonKey);
-                mergeJson(node, json[jsonKey], scope, filePath);
+                mergeJson(node, json[jsonKey], scope, filePath, unhandledKeys, true);
                 scope.pop_back();
-            } else if (existingKeys.find(jsonKey) != existingKeys.end()) {
-                existingKeys.erase(jsonKey);
             } else {
-                Node *newChildNode;
-                if (itr->type() == Json::objectValue) {
-                    newChildNode = new BranchNode(parentNode);
-                } else {
-                    newChildNode = new LeafNode(parentNode);
-                }
-                parentNode->addSubnode(newChildNode, jsonKey);
+                Node *childNode = (*parentNode)[jsonKey];
+                if (!childNode) {
+                    if (itr->type() == Json::objectValue) {
+                        childNode = new BranchNode(parentNode);
+                    } else {
+                        childNode = new LeafNode(parentNode);
+                    }
+                    parentNode->addSubnode(childNode, jsonKey);
 
-                cout << "Appended new node for key: " << jsonKey << endl;
+                    cout << "Appended new node for key: " << jsonKey << endl;
+                }
+
+                unhandledKeys.erase(jsonKey);
+
+                set<string> childUnhandledKeys;
+                if (!childNode->isLeafNode()) ((BranchNode *)childNode)->getSubnodeKeys(childUnhandledKeys);
+                mergeJson(childNode, *itr, scope, filePath, childUnhandledKeys, true);
             }
 
-            mergeJson((*parentNode)[jsonKey], *itr, scope, filePath);
         }
 
         //  other keys under this branch that this json didn't have anything for
-        for (auto key : existingKeys) {
-            (*parentNode)[key]->removeValuesFromFile(filePath);
+        if (removeValuesForUnhandledKeys) {
+            for (auto key : unhandledKeys) {
+                (*parentNode)[key]->removeValuesFromFile(filePath);
+            }
         }
     }
 }
@@ -296,7 +300,7 @@ void Context::fileChanged(const QString &filePath) {
 
 void Context::addFile(const string &path) {
     if (containsFile(path)) {
-        throw invalid_argument("The given file is already present in the context" + path);
+        throw invalid_argument("The given file is already present in the context: '" + path + "'");
     }
 
     Json::Value tree;
@@ -304,7 +308,9 @@ void Context::addFile(const string &path) {
 
     try {
         vector<string>scope;
-        mergeJson(_rootNode, tree, scope, path);
+        set<string> rootKeys;
+        _rootNode->getSubnodeKeys(rootKeys);
+        mergeJson(_rootNode, tree, scope, path, rootKeys, true);
     } catch (TypeMismatchError e) {
         cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
         cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
@@ -332,7 +338,7 @@ bool Context::containsFile(const string &path) {
 void Context::removeFile(const string &filePath) {
     int idx = indexOfFile(filePath);
     if (idx == -1) {
-        cerr << "Warning: Attempt to remove file from Context that's not in the context: " << filePath;
+        cerr << "Warning: Attempt to remove file from Context that's not in the context: " << filePath << endl;
     } else {
         _configFiles.erase(_configFiles.begin() + idx);
         _fsWatcher.removePath(QString::fromStdString(filePath));
