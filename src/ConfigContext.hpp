@@ -48,7 +48,7 @@ public:
     string keyPath() const;
 
     virtual QVariant data(int column) const = 0;
-    virtual int columnCount() const = 0;
+    // virtual int columnCount() const = 0;
     virtual int childCount() const = 0;
     virtual int row();
 
@@ -91,7 +91,7 @@ public:
     bool isLeafNode() const;
     int childCount() const;
 
-    int columnCount() const;
+    // int columnCount() const;
     QVariant data(int column) const;
 
     Node *operator[](const string &key);
@@ -156,10 +156,10 @@ public:
     }
 
     int childCount() const {
-        return 0;   //  FIXME
+        return _values.size();   //  FIXME
     }
 
-    int columnCount() const;
+    // int columnCount() const;
     QVariant data(int column) const;
 
     void removeValuesFromFile(const string &filePath);
@@ -236,22 +236,9 @@ public:
      */
     static bool keyIsJsonScopeSpecifier(const string &key);
 
+    static string extractKeyFromJsonScopeSpecifier(const string &scopeSpec);
 
 protected:
-
-    void _didInsert(const QModelIndex &index) {
-        //  FIXME: emit, notify
-    }
-
-    void _didDelete(const QModelIndex &index) {
-        //  FIXME: emit, notify
-    }
-
-    void _didChange(const QModelIndex &index) {
-        //  FIXME: emit, notify
-    }
-
-
 
     /**
      * Anything that isn't a json 'object' type is stored in the tree in a leaf node as a QVariant.

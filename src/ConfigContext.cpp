@@ -115,9 +115,9 @@ void BranchNode::removeValuesFromFile(const string &filePath) {
     }
 }
 
-int BranchNode::columnCount() const {
-    return 1;
-}
+// int BranchNode::columnCount() const {
+//     return 1;
+// }
 
 QVariant BranchNode::data(int column) const {
     if (column == 0) {
@@ -139,12 +139,15 @@ void LeafNode::removeValuesFromFile(const string &filePath) {
 }
 
 void LeafNode::addValue(const QVariant &val, const string &filePath, const vector<string> &scope) {
+    cout << "Added value to keypath '" << keyPath() << "' with scope ";
+    for (string key : scope) cout << key << ".";
+    cout << "'; filePath '" << filePath << "'" << endl;
     _values.push_back(ValueEntry(val, filePath, scope));
 }
 
-int LeafNode::columnCount() const {
-    return 2;
-}
+// int LeafNode::columnCount() const {
+//     return 2;
+// }
 
 QVariant LeafNode::data(int column) const {
     if (column == 0) {
@@ -182,6 +185,8 @@ const QVariant *LeafNode::getValue(const vector<string> &scope, const string &fi
         }
         if (matchingEntries.size() > 0 || (scope.size() == 0 && fileSpecified)) break;
     }
+
+    cout << "at getPath() for '" << keyPath() << "', value count = " << _values.size() << endl;
 
     if (matchingEntries.size() > 0) {
         //  sort by file priority
@@ -225,7 +230,7 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
 
             //  handle scopes
             if (keyIsJsonScopeSpecifier(jsonKey)) {
-                scope.push_back(jsonKey);
+                scope.push_back(extractKeyFromJsonScopeSpecifier(jsonKey));
                 mergeJson(node, json[jsonKey], scope, filePath, unhandledKeys, true);
                 scope.pop_back();
             } else {
@@ -284,6 +289,10 @@ QVariant Context::variantValueFromJson(const Json::Value &json) {
 
 bool Context::keyIsJsonScopeSpecifier(const string &key) {
     return key.length() >= 3 && key[0] == '$' && key[1] == '$';
+}
+
+string Context::extractKeyFromJsonScopeSpecifier(const string &scopeSpec) {
+    return scopeSpec.substr(2);
 }
 
 
