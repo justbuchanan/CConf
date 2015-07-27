@@ -12,8 +12,6 @@
 #include <QFileSystemWatcher>
 #include <QAbstractItemModel>
 
-using namespace std;
-
 
 namespace CConf {
 
@@ -25,9 +23,9 @@ namespace CConf {
  * type, there is a type mismatch that can't be resolved.  Note that t's ok for leaves from different
  * files to be different types.
  */
-class TypeMismatchError : public runtime_error {
+class TypeMismatchError : public std::runtime_error {
 public:
-    TypeMismatchError(const string &what) : runtime_error(what) {}
+    TypeMismatchError(const std::string& what) : std::runtime_error(what) {}
 };
 
 
@@ -43,9 +41,9 @@ public:
 
     virtual bool isLeafNode() const = 0;
 
-    virtual void removeValuesFromFile(const string &filePath) = 0;
+    virtual void removeValuesFromFile(const std::string& filePath) = 0;
 
-    string keyPath() const;
+    std::string keyPath() const;
 
     virtual QVariant data(int column) const = 0;
     // virtual int columnCount() const = 0;
@@ -74,7 +72,7 @@ protected:
 
 
 private:
-    void _prependKeyPath(string &keyPathOut) const;
+    void _prependKeyPath(std::string* keyPathOut) const;
 
     Context *_context;
     BranchNode *_parent;
@@ -94,25 +92,26 @@ public:
     // int columnCount() const;
     QVariant data(int column) const;
 
-    Node *operator[](const string &key);
+    Node *operator[](const std::string& key);
     Node *_childAtIndex(int index);
     int indexOfSubnode(const Node *child) const;
 
-    void removeValuesFromFile(const string &filePath);
+    void removeValuesFromFile(const std::string& filePath);
 
-    void getSubnodeKeys(set<string> keysOut);
+    void getSubnodeKeys(std::set<std::string>* keysOut);
 
-    string keyForSubnode(const Node *subnode) const;
+    std::string keyForSubnode(const Node *subnode) const;
 
 protected:
     friend class Context;
 
-    void addSubnode(Node *node, const string &key);
-    void removeSubnode(const string &key);
+    void addSubnode(Node* node, const std::string& key);
+    void removeSubnode(const std::string& key);
 
 protected:
-    vector<string> _subnodeOrder; //  alphabetically ordered keys
-    map<string, Node*> _subnodes;
+    std::vector<std::string> _subnodeOrder; //  alphabetically ordered keys
+    // TODO: use unique_ptr to subnodes
+    std::map<std::string, Node*> _subnodes;
 };
 
 
@@ -121,26 +120,23 @@ protected:
 
 class ValueEntry {
 public:
-    ValueEntry(const QVariant &value, const string &filePath, const vector<string> &scope = vector<string>()) {
-        _value = value;
-        _filePath = filePath;
-        _scope = scope;
+    ValueEntry(const QVariant &value, const std::string& filePath,
+        const std::vector<std::string> &scope = {}) : _value(value), _filePath(filePath), _scope(scope) {
     }
 
     const bool isDefaultScope() const {
         return _scope.size() == 0;
     }
 
-    const vector<string> &scope() const { return _scope; }
-    const string &filePath() const { return _filePath; }
+    const std::vector<std::string>& scope() const { return _scope; }
+    const std::string& filePath() const { return _filePath; }
 
     const QVariant &value() const { return _value; }
-    // QVariant &value() { return _value; }
 
 private:
     QVariant _value;
-    string _filePath;
-    vector<string> _scope;
+    std::string _filePath;
+    std::vector<std::string> _scope;
 };
 
 
@@ -162,9 +158,9 @@ public:
     // int columnCount() const;
     QVariant data(int column) const;
 
-    void removeValuesFromFile(const string &filePath);
+    void removeValuesFromFile(const std::string& filePath);
 
-    void addValue(const QVariant &val, const string &filePath, const vector<string> &scope = vector<string>());
+    void addValue(const QVariant &val, const std::string& filePath, const std::vector<std::string> &scope = std::vector<std::string>());
 
     /**
      * @brief Get the QVariant value of this leaf with the highest priority
@@ -175,11 +171,11 @@ public:
      * @param filepath The path of the file that the value should come from
      * @return A QVariant* containing the value.  If no value matches the query, returns nullptr
      */
-    const QVariant *getValue(const vector<string> &scope = vector<string>(), const string &filePath = "") const;
+    const QVariant *getValue(const std::vector<std::string> &scope = std::vector<std::string>(), const std::string& filePath = "") const;
 
 
 private:
-    vector<ValueEntry> _values;
+    std::vector<ValueEntry> _values;
 };
 
 
@@ -192,26 +188,26 @@ class Context : public QAbstractItemModel {
 public:
     Context();
 
-    void fileChanged(const QString &filePath);
+    void fileChanged(const QString& filePath);
 
-    void addFile(const string &path);
+    void addFile(const std::string& path);
 
-    void readFile(const string &filePath, Json::Value &jsonOut);
+    void readFile(const std::string& filePath, Json::Value &jsonOut);
 
-    bool containsFile(const string &path);
+    bool containsFile(const std::string& path);
 
-    void removeFile(const string &filePath);
+    void removeFile(const std::string& filePath);
 
 
     /// returns -1 if the file isn't a part of this context
-    int indexOfFile(const string &path) const;
+    int indexOfFile(const std::string& path) const;
 
     /**
      * Find the relative priority of a file.
      * @param filePath Where the file lives
      * @return the relative priority of the file.  Higher values indicate greater importance/priority
      */
-    int priorityOfFile(const string &filePath) const {
+    int priorityOfFile(const std::string& filePath) const {
         return indexOfFile(filePath);
     }
 
@@ -234,9 +230,9 @@ public:
      * @param key the json key string
      * @return whether or not it's a scope specifier
      */
-    static bool keyIsJsonScopeSpecifier(const string &key);
+    static bool keyIsJsonScopeSpecifier(const std::string& key);
 
-    static string extractKeyFromJsonScopeSpecifier(const string &scopeSpec);
+    static std::string extractKeyFromJsonScopeSpecifier(const std::string& scopeSpec);
 
 protected:
 
@@ -264,7 +260,11 @@ protected:
      * @param json the json to merge onto the given tree
      * @param filePath the file path of the json - used to lookup the priority of @json as necessary
      */
-    void mergeJson(Node *node, const Json::Value &json, vector<string> &scope, const string &filePath, set<string> &unhandledKeys, bool removeValuesForUnhandledKeys = true);
+    void mergeJson(Node *node, const Json::Value &json,
+        std::vector<std::string> &scope,
+        const std::string& filePath,
+        std::set<std::string> &unhandledKeys,
+        bool removeValuesForUnhandledKeys = true);
 
 
     /**
@@ -277,15 +277,15 @@ protected:
      * @param filePath The path of the file we're extracting for.
      * @return 
      */
-    void extractJson(const string &filePath, Json::Value &json) {
-        throw invalid_argument("TODO");
+    void extractJson(const std::string& filePath, Json::Value &json) {
+        throw std::invalid_argument("TODO");
     }
 
 
 
 private:
     //  higher index = higher precedence when cascading values. FIXME: is this true?
-    vector<string> _configFiles;
+    std::vector<std::string> _configFiles;
     BranchNode *_rootNode;
     QFileSystemWatcher _fsWatcher;
 };
@@ -297,38 +297,60 @@ private:
 template<typename T>
 class ConfigValue {
 public:
-    ConfigValue(string keyPath, T defaultValue, string comment = "");
-    ConfigValue(shared_ptr<Context> ctxt, string keyPath, T defaultValue, string comment = "");
+    // ConfigValue(const std::string& keyPath, T defaultValue, const std::string& comment = "");
+    ConfigValue(std::shared_ptr<Context> ctxt, const std::string& keyPath, T defaultValue, const std::string& comment = "");
 
     void setContext(Context *ctxt) {
         _context = ctxt;
     }
 
-    Context context() {
+    const Context* context() const {
         return _context;
     }
 
-    const string &comment() const {
+    const std::string& comment() const {
         return _comment;
     }
 
+    // TODO: operator dereferene
+
+    // TODO: signal for value change?
+
+    // TODO: add scope
+
 
 private:
-    string _keyPath;
+    std::string _keyPath;
     T _value;
-    vector<string> _scope;
-    string _comment;
-    shared_ptr<Context> _context;
+    std::vector<std::string> _scope;
+    std::string _comment;
+    std::shared_ptr<Context> _context;
 };
-
 
 
 
 class ConfigDouble : public ConfigValue<double> {
 public:
-    ConfigDouble(string keyPath, double defaultValue = 0, string comment = "");
+    ConfigDouble(const std::string& keyPath, double defaultValue = 0, const std::string& comment = "");
     operator double();
 };
+
+class ConfigString : public ConfigValue<std::string> {
+public:
+    ConfigString(const std::string& keyPath, const std::string& defaultValue = "", const std::string& comment = "");
+    operator std::string();
+};
+
+// template<typename T>
+// class ConfigVector : public ConfigValue<std::vector<T> > {
+// public:
+//     ConfigVector(const std::string& keyPath, const std::vector<T>& defaultValue = {}, const std::string& comment = "");
+// };
+
+// class ConfigVectorDouble : public ConfigVector<double> {
+// public:
+//     ConfigVector(const std::string& keyPath, const std::vector<double>& defaultValue = {}, const std::string& comment = "");
+// };
 
 
 };  //  end namespace CConf

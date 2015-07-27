@@ -7,4 +7,4 @@ run: all
 	bin/cconf-test
 
 clean:
-	rm -rf build
+	rm -rf build bin

@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cassert>
 
+using namespace std;
+
 
 namespace CConf {
 
@@ -10,9 +12,9 @@ namespace CConf {
  * Extracts all of the keys from the given map and puts them in the @keysOut set
  */
 template<typename KeyType, typename ValueType>
-void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> &keysOut) {
+void getMapKeys(const map<KeyType, ValueType> &theMap, set<KeyType> *keysOut) {
     for (auto itr : theMap) {
-        keysOut.insert(itr.first);
+        keysOut->insert(itr.first);
     }
 }
 
@@ -25,7 +27,6 @@ Node::Node(BranchNode *parent, Context *context) {
 }
 
 Node::~Node() {
-    delete _parent;
 }
 
 int Node::row() {
@@ -36,17 +37,17 @@ int Node::row() {
     }
 }
 
-void Node::_prependKeyPath(string &keyPathOut) const {
+void Node::_prependKeyPath(string *keyPathOut) const {
     if (_parent) {
-        keyPathOut.insert(0, ".");
-        keyPathOut.insert(0, _parent->keyForSubnode(this));
+        keyPathOut->insert(0, ".");
+        keyPathOut->insert(0, _parent->keyForSubnode(this));
         _parent->_prependKeyPath(keyPathOut);
     }
 }
 
 string Node::keyPath() const {
     string keyPath;
-    _prependKeyPath(keyPath);
+    _prependKeyPath(&keyPath);
     return keyPath;
 }
 
@@ -71,7 +72,7 @@ int BranchNode::childCount() const {
     return _subnodes.size();
 }
 
-void BranchNode::addSubnode(Node *node, const string &key) {
+void BranchNode::addSubnode(Node* node, const string &key) {
     if (_subnodes[key] != nullptr) throw invalid_argument("Attempt to add subnode for key that already exists: '" + key + "'");
 
     _subnodeOrder.push_back(key);
@@ -91,7 +92,7 @@ void BranchNode::removeSubnode(const string &key) {
     delete node;
 }
 
-void BranchNode::getSubnodeKeys(set<string> keysOut) {
+void BranchNode::getSubnodeKeys(set<string> *keysOut) {
     getMapKeys<string, Node*>(_subnodes, keysOut);
 }
 
@@ -249,7 +250,7 @@ void Context::mergeJson(Node *node, const Json::Value &json, vector<string> &sco
                 unhandledKeys.erase(jsonKey);
 
                 set<string> childUnhandledKeys;
-                if (!childNode->isLeafNode()) ((BranchNode *)childNode)->getSubnodeKeys(childUnhandledKeys);
+                if (!childNode->isLeafNode()) ((BranchNode *)childNode)->getSubnodeKeys(&childUnhandledKeys);
                 mergeJson(childNode, *itr, scope, filePath, childUnhandledKeys, true);
             }
 
@@ -316,13 +317,14 @@ void Context::addFile(const string &path) {
     readFile(path, tree);   //  note: throws an exception on failure
 
     try {
-        vector<string>scope;
+        vector<string> scope;
         set<string> rootKeys;
-        _rootNode->getSubnodeKeys(rootKeys);
+        _rootNode->getSubnodeKeys(&rootKeys);
         mergeJson(_rootNode, tree, scope, path, rootKeys, true);
     } catch (TypeMismatchError e) {
         cerr << "Encountered a type mismatch when trying to load file: " << path << endl;
         cerr << "  Unloading all values from this file and rethrowing.  Correct and try again." << endl;
+        // TODO: unload values from the failed file
         throw e;
     }
 
@@ -369,6 +371,8 @@ QModelIndex Context::index(int row, int column, const QModelIndex &parent) const
 
     BranchNode *parentNode = parent.isValid() ? static_cast<BranchNode*>(parent.internalPointer()) : _rootNode;
 
+#warning This doesn't handle LeafNodes correctly - we tell Qt that LeafNode has subnodes, then here we assume each Node pointed to is a BranchNode...
+
     Node *childNode = parentNode->_childAtIndex(row);
     return childNode != nullptr ? createIndex(row, column, childNode) : QModelIndex();
 }
@@ -386,27 +390,21 @@ QModelIndex Context::parent(const QModelIndex &child) const {
 
 
 int Context::rowCount(const QModelIndex &parent) const {
-    const Node *parentNode;
     if (parent.column() > 0) return 0;
 
+    const Node *node;
     if (!parent.isValid()) {
-        parentNode = _rootNode;
+        node = _rootNode;
     } else {
-        parentNode = static_cast<const Node*>(parent.internalPointer());
+        node = static_cast<const Node*>(parent.internalPointer());
     }
 
-    return parentNode->childCount();
+    return node->childCount();
 }
 
 
 int Context::columnCount(const QModelIndex &parent) const {
     return 2;
-
-    // if (parent.isValid()) {
-    //     return static_cast<const Node*>(parent.internalPointer())->columnCount();
-    // } else {
-    //     return _rootNode->columnCount();
-    // }
 }
 
 
@@ -429,7 +427,7 @@ Qt::ItemFlags Context::flags(const QModelIndex &index) const {
 
 QVariant Context::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-        return "CConf";
+        return section == 0 ? "Key Path" : "Value";
     }
 
     return QVariant();
