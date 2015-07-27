@@ -19,15 +19,16 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 # includes
 include_directories(src)
 
-# TODO: include a FindQt5.cmake instead of hard-coding this
-if(APPLE)
-    set (CMAKE_PREFIX_PATH "/usr/local/Cellar/qt5/5.3.2/lib/cmake/Qt5Widgets")
-endif()
-
 # Qt5
+if(APPLE)
+    find_package(Qt5Widgets
+        REQUIRED
+        PATHS /usr/local/Cellar/qt5/*)
+else()
+    find_package(Qt5Widgets REQUIRED)
+endif()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-find_package(Qt5Widgets REQUIRED)
 
 
 ExternalProject_Add(jsoncpp-proj
