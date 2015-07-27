@@ -32,7 +32,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 
 ExternalProject_Add(jsoncpp-proj
-    GIT_REPOSITORY git://github.com/open-source-parsers/jsoncpp
+    GIT_REPOSITORY ${PROJECT_SOURCE_DIR}/third_party/jsoncpp
     GIT_TAG master
     INSTALL_COMMAND "" # prevent global install
     UPDATE_COMMAND ""
