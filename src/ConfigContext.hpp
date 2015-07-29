@@ -175,7 +175,7 @@ class Context : public QAbstractItemModel {
 
   void addFile(const std::string &path);
 
-  void readFile(const std::string &filePath, Json::Value &jsonOut);
+  Json::Value readFile(const std::string &filePath);
 
   bool containsFile(const std::string &path);
 
@@ -266,7 +266,7 @@ class Context : public QAbstractItemModel {
    * @param filePath The path of the file we're extracting for.
    * @return
    */
-  void extractJson(const std::string &filePath, Json::Value &json) {
+  Json::Value extractJson(const std::string &filePath) {
     throw std::invalid_argument("TODO");
   }
 

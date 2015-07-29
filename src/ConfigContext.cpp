@@ -323,8 +323,8 @@ void Context::addFile(const string &path) {
         "The given file is already present in the context: '" + path + "'");
   }
 
-  Json::Value tree;
-  readFile(path, tree);  //  note: throws an exception on failure
+  //  note: throws an exception on failure
+  Json::Value tree = readFile(path);
 
   try {
     vector<string> scope;
@@ -345,13 +345,15 @@ void Context::addFile(const string &path) {
   _fsWatcher.addPath(QString::fromStdString(path));
 }
 
-void Context::readFile(const string &filePath, Json::Value &jsonOut) {
+Json::Value Context::readFile(const string &filePath) {
   ifstream doc(filePath);
   Json::Reader reader;
-  if (!reader.parse(doc, jsonOut)) {
+  Json::Value json;
+  if (!reader.parse(doc, json)) {
     throw runtime_error("failed to parse json: " +
                         reader.getFormattedErrorMessages());
   }
+  return json;
 }
 
 bool Context::containsFile(const string &path) {
