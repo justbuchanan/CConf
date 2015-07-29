@@ -14,16 +14,13 @@
 
 namespace CConf {
 
-/**
- * @brief Error that occurs when loading a json file creates a type mismatch
- between nodes.
 
- * @details If one json file has a leaf type for a given path and another has an
- object (map/dict)
- * type, there is a type mismatch that can't be resolved.  Note that t's ok for
- leaves from different
- * files to be different types.
- */
+/// @brief Error that occurs when loading a json file creates a type mismatch
+/// between nodes.
+
+/// @details If one json file has a leaf type for a given path and another has
+/// an object (map/dict) type, there is a type mismatch that can't be resolved.
+/// Note that t's ok for leaves from different files to be different types.
 class TypeMismatchError : public std::runtime_error {
  public:
   TypeMismatchError(const std::string &what) : std::runtime_error(what) {}
@@ -44,7 +41,6 @@ class Node {
   std::string keyPath() const;
 
   virtual QVariant data(int column) const = 0;
-  // virtual int columnCount() const = 0;
   virtual int childCount() const = 0;
   virtual int row();
 
