@@ -8,3 +8,6 @@ run: all
 
 clean:
 	rm -rf build bin
+
+pretty:
+	clang-format -style=file -i src/*.cpp src/*.hpp
