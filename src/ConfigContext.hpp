@@ -14,6 +14,8 @@
 
 namespace CConf {
 
+// TODO: description
+const extern std::string CConfScopeKeyPrefix;
 
 /// @brief Error that occurs when loading a json file creates a type mismatch
 /// between nodes.
@@ -71,7 +73,7 @@ class BranchNode : public Node {
   BranchNode(BranchNode *parent = nullptr, Context *context = nullptr)
       : Node(parent, context) {}
 
-  bool isLeafNode() const;
+  bool isLeafNode() const { return false }
   int childCount() const;
 
   // int columnCount() const;
@@ -101,15 +103,21 @@ class BranchNode : public Node {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class ValueEntry {
+class ValueNode : public Node {
  public:
-  ValueEntry(const QVariant &value, const std::string &filePath,
-             const std::vector<std::string> &scope = {})
+  ValueNode(const QVariant &value, const std::string &filePath,
+            const std::vector<std::string> &scope = {})
       : _value(value), _filePath(filePath), _scope(scope) {}
 
-  const bool isDefaultScope() const { return _scope.size() == 0; }
+  bool isDefaultScope() const { return _scope.size() == 0; }
 
-  const std::vector<std::string> &scope() const { return _scope; }
+  bool isLeafNode() const { return true; }
+
+  void removeValuesFromFile(const)
+
+      const std::vector<std::string> &scope() const {
+    return _scope;
+  }
   const std::string &filePath() const { return _filePath; }
 
   const QVariant &value() const { return _value; }
@@ -127,7 +135,7 @@ class LeafNode : public Node {
   LeafNode(BranchNode *parent = nullptr, Context *context = nullptr)
       : Node(parent, context) {}
 
-  bool isLeafNode() const { return true; }
+  bool isLeafNode() const { return false; }
 
   int childCount() const {
     return _values.size();  //  FIXME
@@ -160,7 +168,7 @@ class LeafNode : public Node {
       const std::string &filePath = "") const;
 
  private:
-  std::vector<ValueEntry> _values;
+  std::vector<ValueNode> _values;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

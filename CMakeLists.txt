@@ -41,11 +41,14 @@ link_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj-build/
 include_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj/include)
 
 
-# the main executable
-file(GLOB cconf_SRC
-    "src/*.cpp"
+the main executable
+file(GLOB cconf_lib_SRC
+    "src/ConfigContext.cpp"
 )
-add_executable("cconf-test" ${cconf_SRC})
-add_dependencies(cconf-test jsoncpp-proj)
-target_link_libraries(cconf-test "jsoncpp")
-qt5_use_modules("cconf-test" Widgets Core)
+add_library(cconf ${cconf_lib_SRC})
+add_dependencies(cconf jsoncpp-proj)
+target_link_libraries(cconf "jsoncpp")
+qt5_use_modules(cconf Widgets Core)
+
+add_executable(cconf-demo src/main.cpp)
+target_link_libraries(cconf-demo cconf)

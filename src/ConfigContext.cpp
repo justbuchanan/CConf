@@ -6,6 +6,8 @@ using namespace std;
 
 namespace CConf {
 
+const std::string CConfScopeKeyPrefix = "$$";
+
 /**
  * Extracts all of the keys from the given map and puts them in the @keysOut set
  */
@@ -138,7 +140,7 @@ void LeafNode::addValue(const QVariant &val, const string &filePath,
   cout << "Added value to keypath '" << keyPath() << "' with scope ";
   for (string key : scope) cout << key << ".";
   cout << "'; filePath '" << filePath << "'" << endl;
-  _values.push_back(ValueEntry(val, filePath, scope));
+  _values.push_back(ValueNode(val, filePath, scope));
 }
 
 // int LeafNode::columnCount() const {
@@ -164,7 +166,7 @@ const QVariant *LeafNode::getValue(const vector<string> &scope,
 
   bool fileSpecified = filePath.length() > 0;
 
-  vector<ValueEntry *> matchingEntries;
+  vector<ValueNode *> matchingEntries;
 
   for (int maxScopeIndex = scope.size() - 1; maxScopeIndex >= -1;
        maxScopeIndex--) {
@@ -194,7 +196,7 @@ const QVariant *LeafNode::getValue(const vector<string> &scope,
   if (matchingEntries.size() > 0) {
     //  sort by file priority
     std::sort(matchingEntries.begin(), matchingEntries.end(),
-              [&](const ValueEntry *a, const ValueEntry *b) -> bool {
+              [&](const ValueNode *a, const ValueNode *b) -> bool {
                 return context()->priorityOfFile(a->filePath()) >
                        context()->priorityOfFile(b->filePath());
               });
@@ -299,11 +301,16 @@ QVariant Context::variantValueFromJson(const Json::Value &json) {
 }
 
 bool Context::keyIsJsonScopeSpecifier(const string &key) {
-  return key.length() >= 3 && key[0] == '$' && key[1] == '$';
+  if (key.length() <= CConfScopeKeyPrefix.length()) return false;
+
+  for (int i = 0; i < CConfScopeKeyPrefix.length(); ++i) {
+    if (key[i] != CConfScopeKeyPrefix[i]) return false;
+  }
+  return true;
 }
 
 string Context::extractKeyFromJsonScopeSpecifier(const string &scopeSpec) {
-  return scopeSpec.substr(2);
+  return scopeSpec.substr(CConfScopeKeyPrefix.length());
 }
 
 Context::Context() {
@@ -335,8 +342,7 @@ void Context::addFile(const string &path) {
     cerr << "Encountered a type mismatch when trying to load file: " << path
          << endl;
     cerr << "  Unloading all values from this file and rethrowing.  Correct "
-            "and try again."
-         << endl;
+            "and try again." << endl;
     // TODO: unload values from the failed file
     throw e;
   }
@@ -364,8 +370,7 @@ void Context::removeFile(const string &filePath) {
   int idx = indexOfFile(filePath);
   if (idx == -1) {
     cerr << "Warning: Attempt to remove file from Context that's not in the "
-            "context: "
-         << filePath << endl;
+            "context: " << filePath << endl;
   } else {
     _configFiles.erase(_configFiles.begin() + idx);
     _fsWatcher.removePath(QString::fromStdString(filePath));
