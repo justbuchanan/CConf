@@ -4,45 +4,46 @@
 
 #include <QFileSystemWatcher>
 #include <QApplication>
+#include <QStandardItemModel>
 #include <QMainWindow>
 #include <QTreeView>
 
 // #include "ConfigContext2.hpp"
 
 
-class TestModel : public QAbstractItemModel {
-  Q_OBJECT
+// class TestModel : public QAbstractItemModel {
+//   Q_OBJECT
 
-  QAbstractItemModel() {
+//   QAbstractItemModel() {
 
-  }
+//   }
 
-  QModelIndex index(int row, int column, const QModelIndex &parent) const;
-  QModelIndex parent(const QModelIndex &child) const {
-    if (!child.isValid()) reteurn QModelIndex();
+//   QModelIndex index(int row, int column, const QModelIndex &parent) const;
+//   QModelIndex parent(const QModelIndex &child) const {
+//     if (!child.isValid()) reteurn QModelIndex();
 
-  }
-  int rowCount(const QModelIndex &parent = QModelIndex()) const {
-    // return 1;
-  }
-  int columnCount(const QModelIndex &parent = QModelIndex()) const {
-    return 2;
-  }
-  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const {
-    return QVariant(true);
-  }
-  Qt::ItemFlags flags(const QModelIndex &index) const {
-      if (!index.isValid()) return 0;
+//   }
+//   int rowCount(const QModelIndex &parent = QModelIndex()) const {
+//     // return 1;
+//   }
+//   int columnCount(const QModelIndex &parent = QModelIndex()) const {
+//     return 2;
+//   }
+//   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const {
+//     return QVariant(true);
+//   }
+//   Qt::ItemFlags flags(const QModelIndex &index) const {
+//       if (!index.isValid()) return 0;
 
-  //  FIXME: this is readonly - eventually we'll make it readwrite
-      return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
-  }
-  QVariant headerData(int section, Qt::Orientation orientation, int role) const {
-    return "Header data";
-  }
+//   //  FIXME: this is readonly - eventually we'll make it readwrite
+//       return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+//   }
+//   QVariant headerData(int section, Qt::Orientation orientation, int role) const {
+//     return "Header data";
+//   }
 
   
-};
+// };
 
 
 using namespace std;
@@ -56,7 +57,17 @@ int main(int argc, char **argv) {
   // ctxt->addFile("example.json");
   // ctxt->addFile("example2.json");
 
-  TestModel model;
+  // TestModel model;
+
+  QStandardItemModel model;
+
+  QStandardItem item(QString("my item"));
+
+  QList<QStandardItem*> myList;
+  myList.append(&item);
+
+  model.appendRow(myList);
+
 
   QTreeView *confView = new QTreeView();
   confView->setModel(&model);

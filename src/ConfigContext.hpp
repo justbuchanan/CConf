@@ -33,7 +33,7 @@ class BranchNode;
 
 class Node {
  public:
-  Node(BranchNode *parent = nullptr, Context *context = nullptr);
+  Node(Context *context = nullptr, BranchNode *parent = nullptr);
   virtual ~Node();
 
   virtual bool isLeafNode() const = 0;
@@ -53,7 +53,6 @@ class Node {
 
  protected:
   friend class BranchNode;
-  friend class LeafNode;
 
   void setContext(Context *context) { _context = context; }
 
@@ -70,11 +69,19 @@ class Node {
 
 class BranchNode : public Node {
  public:
-  BranchNode(BranchNode *parent = nullptr, Context *context = nullptr)
-      : Node(parent, context) {}
+  BranchNode(Context *context = nullptr, BranchNode *parent = nullptr)
+      : Node(context, parent) {}
 
-  bool isLeafNode() const { return false }
+  bool isLeafNode() const { return false; }
   int childCount() const;
+
+  /// If the key for this node is prefixed with the scope prefix, it's a scope
+  /// and is handled differently than other keys.
+  bool isScope() const {
+    return false; // FIXME
+  }
+
+  int childCount() { return 0; }
 
   // int columnCount() const;
   QVariant data(int column) const;
@@ -113,11 +120,14 @@ class ValueNode : public Node {
 
   bool isLeafNode() const { return true; }
 
-  void removeValuesFromFile(const)
-
-      const std::vector<std::string> &scope() const {
-    return _scope;
+  int childCount() const { return 0; }
+  virtual QVariant data(int column) const override {
+    return _value;
   }
+
+  void removeValuesFromFile(const std::string& filePath) {}
+
+  const std::vector<std::string> &scope() const { return _scope; }
   const std::string &filePath() const { return _filePath; }
 
   const QVariant &value() const { return _value; }
@@ -126,49 +136,6 @@ class ValueNode : public Node {
   QVariant _value;
   std::string _filePath;
   std::vector<std::string> _scope;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
-class LeafNode : public Node {
- public:
-  LeafNode(BranchNode *parent = nullptr, Context *context = nullptr)
-      : Node(parent, context) {}
-
-  bool isLeafNode() const { return false; }
-
-  int childCount() const {
-    return _values.size();  //  FIXME
-  }
-
-  // int columnCount() const;
-  QVariant data(int column) const;
-
-  void removeValuesFromFile(const std::string &filePath);
-
-  void addValue(
-      const QVariant &val, const std::string &filePath,
-      const std::vector<std::string> &scope = std::vector<std::string>());
-
-  /**
-   * @brief Get the QVariant value of this leaf with the highest priority
-   *
-   * @details You can optionally specify the scope and/or filePath to refine the
-   * query.
-   * @param scope The scope you want to search in.  If no value is present for
-   * this exact scope,
-   * it searches subscopes.  Passing an empty scope vector searches the default
-   * scope.
-   * @param filepath The path of the file that the value should come from
-   * @return A QVariant* containing the value.  If no value matches the query,
-   * returns nullptr
-   */
-  const QVariant *getValue(
-      const std::vector<std::string> &scope = std::vector<std::string>(),
-      const std::string &filePath = "") const;
-
- private:
-  std::vector<ValueNode> _values;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -192,12 +159,10 @@ class Context : public QAbstractItemModel {
   /// returns -1 if the file isn't a part of this context
   int indexOfFile(const std::string &path) const;
 
-  /**
-   * Find the relative priority of a file.
-   * @param filePath Where the file lives
-   * @return the relative priority of the file.  Higher values indicate greater
-   * importance/priority
-   */
+  /// Find the relative priority of a file.
+  /// @param filePath Where the file lives
+  /// @return the relative priority of the file.  Higher values indicate greater
+  /// importance/priority
   int priorityOfFile(const std::string &filePath) const {
     return indexOfFile(filePath);
   }
@@ -214,66 +179,58 @@ class Context : public QAbstractItemModel {
   Qt::ItemFlags flags(const QModelIndex &index) const;
   QVariant headerData(int section, Qt::Orientation orientation, int role) const;
 
-  /**
-   * @brief Determine whether the key specifies a (sub)scope rather than a
-   * regular keypath
-   * @details Scopes paths are prefixed with '$$', so we check to see if @key
-   * has this prefix.
-   *
-   * @param key the json key string
-   * @return whether or not it's a scope specifier
-   */
+  /// @brief Determine whether the key specifies a (sub)scope rather than a
+  /// regular keypath
+  /// @details Scopes paths are prefixed with '$$', so we check to see if @key
+  /// has this prefix.
+  ///
+  /// @param key the json key string
+  /// @return whether or not it's a scope specifier
   static bool keyIsJsonScopeSpecifier(const std::string &key);
 
   static std::string extractKeyFromJsonScopeSpecifier(
       const std::string &scopeSpec);
 
  protected:
-  /**
-   * Anything that isn't a json 'object' type is stored in the tree in a leaf
-   * node as a QVariant.
-   * This method creates the corresponding QVariant from a json value.
-   * See <json/value.h> for a list of available types
-   */
+  /// Anything that isn't a json 'object' type is stored in the tree in a leaf
+  /// node as a QVariant.
+  /// This method creates the corresponding QVariant from a json value.
+  /// See <json/value.h> for a list of available types
   static QVariant variantValueFromJson(const Json::Value &json);
 
-  /**
-   * recursive method to apply the new json value on top of the config (sub)tree
-   * calls _didInsert, _didDelete, _didChange as it goes
-   * respects the priorities already present and only replaces if the given json
-   * has higher prioity
-   * then another leaf node with the same key path.
-   *
-   * If a type mismatch is encountered, the TypeMismatchError is thrown, but the
-   * values are not
-   * removed from the tree - that's the job of the caller.
-   *
-   * As it walks the tree, it removes any values from the @node and its subnodes
-   * that came from
-   * @filePath, but are not in @json.
-   *
-   * @param node the root of the (sub)tree to merge the new values onto
-   * @param json the json to merge onto the given tree
-   * @param filePath the file path of the json - used to lookup the priority of
-   * @json as necessary
-   */
+  /// recursive method to apply the new json value on top of the config (sub)tree
+  /// calls _didInsert, _didDelete, _didChange as it goes
+  /// respects the priorities already present and only replaces if the given json
+  /// has higher prioity
+  /// then another leaf node with the same key path.
+  ///
+  /// If a type mismatch is encountered, the TypeMismatchError is thrown, but the
+  /// values are not
+  /// removed from the tree - that's the job of the caller.
+  ///
+  /// As it walks the tree, it removes any values from the @node and its subnodes
+  /// that came from
+  /// @filePath, but are not in @json.
+  ///
+  /// @param node the root of the (sub)tree to merge the new values onto
+  /// @param json the json to merge onto the given tree
+  /// @param filePath the file path of the json - used to lookup the priority of
+  /// @json as necessary
   void mergeJson(Node *node, const Json::Value &json,
                  std::vector<std::string> &scope, const std::string &filePath,
                  std::set<std::string> &unhandledKeys,
                  bool removeValuesForUnhandledKeys = true);
 
-  /**
-   * @brief Extract the json for the given file so it can be written to disk
-   *
-   * @details We don't store a Json::Value for trees in the context.  We load it
-   * from a file,
-   * then store it in our custom tree structure.  To write it out to disk, we
-   * have have to
-   * convert it from our internal representation back to json.
-   *
-   * @param filePath The path of the file we're extracting for.
-   * @return
-   */
+  /// @brief Extract the json for the given file so it can be written to disk
+  ///
+  /// @details We don't store a Json::Value for trees in the context.  We load it
+  /// from a file,
+  /// then store it in our custom tree structure.  To write it out to disk, we
+  /// have have to
+  /// convert it from our internal representation back to json.
+  ///
+  /// @param filePath The path of the file we're extracting for.
+  /// @return
   Json::Value extractJson(const std::string &filePath) {
     throw std::invalid_argument("TODO");
   }

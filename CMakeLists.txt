@@ -41,7 +41,7 @@ link_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj-build/
 include_directories(${CMAKE_BINARY_DIR}/jsoncpp-proj-prefix/src/jsoncpp-proj/include)
 
 
-the main executable
+# the main executable
 file(GLOB cconf_lib_SRC
     "src/ConfigContext.cpp"
 )
