@@ -1,7 +1,7 @@
 
 all:
 	mkdir -p build
-	cd build; cmake ..; make
+	cd build; cmake -GNinja .. && ninja
 
 run: all
 	bin/cconf-test
