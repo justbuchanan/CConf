@@ -11,19 +11,19 @@
 
 using namespace std;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   QApplication app(argc, argv);
   const QString name("CConf Demo");
   app.setApplicationDisplayName(name);
 
-  CConf::Context *ctxt = new CConf::Context();
+  CConf::Context* ctxt = new CConf::Context();
   ctxt->addFile("example.json");
   // ctxt->addFile("example2.json");
 
-  QTreeView *confView = new QTreeView();
+  QTreeView* confView = new QTreeView();
   confView->setModel(ctxt);
 
-  QMainWindow *win = new QMainWindow();
+  QMainWindow* win = new QMainWindow();
   win->addToolBar(name);
   win->setCentralWidget(confView);
   win->show();

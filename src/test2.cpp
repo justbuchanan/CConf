@@ -10,7 +10,6 @@
 
 // #include "ConfigContext2.hpp"
 
-
 // class TestModel : public QAbstractItemModel {
 //   Q_OBJECT
 
@@ -38,17 +37,16 @@
 //   //  FIXME: this is readonly - eventually we'll make it readwrite
 //       return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 //   }
-//   QVariant headerData(int section, Qt::Orientation orientation, int role) const {
+//   QVariant headerData(int section, Qt::Orientation orientation, int role)
+//   const {
 //     return "Header data";
 //   }
 
-  
 // };
-
 
 using namespace std;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   QApplication app(argc, argv);
   const QString name("CConf Demo");
   app.setApplicationDisplayName(name);
@@ -68,11 +66,10 @@ int main(int argc, char **argv) {
 
   model.appendRow(myList);
 
-
-  QTreeView *confView = new QTreeView();
+  QTreeView* confView = new QTreeView();
   confView->setModel(&model);
 
-  QMainWindow *win = new QMainWindow();
+  QMainWindow* win = new QMainWindow();
   win->addToolBar(name);
   win->setCentralWidget(confView);
   win->show();
