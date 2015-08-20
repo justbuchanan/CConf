@@ -10,4 +10,6 @@ clean:
 	rm -rf build bin
 
 pretty:
-	clang-format -style=file -i src/*.cpp src/*.hpp
+	stylize --exclude_dirs bin build third_party
+checkstyle:
+	stylize --check --exclude_dirs bin build third_party
