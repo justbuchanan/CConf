@@ -10,8 +10,8 @@ In this scheme, preferences defined per project override those defined in the us
 
 This library aims to make these types of situations as easy as possible.
 
-*Note: This is currently under development and not ready for use -
-this notice will be removed once the basic functionality is implemented and tested*
+**Note: This is currently under development and not ready for use -
+this notice will be removed once the basic functionality is implemented and tested**
 
 
 ## Precedence
